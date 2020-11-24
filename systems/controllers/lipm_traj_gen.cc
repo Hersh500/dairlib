@@ -167,10 +167,11 @@ ExponentialPlusPiecewisePolynomial<double> LIPMTrajGenerator::ConstructLipmTraj(
   // Get CoM_wrt_foot for LIPM
   const double CoM_wrt_foot_x = CoM(0) - stance_foot_pos(0);
   const double CoM_wrt_foot_y = CoM(1) - stance_foot_pos(1);
-  const double CoM_wrt_foot_z = (CoM(2) - stance_foot_pos(2));
+  double CoM_wrt_foot_z = (CoM(2) - stance_foot_pos(2));
   const double dCoM_wrt_foot_x = dCoM(0);
   const double dCoM_wrt_foot_y = dCoM(1);
   // const double dCoM_wrt_foot_z = dCoM(2);
+  if (CoM_wrt_foot_z == 0) CoM_wrt_foot_z = 1;
   DRAKE_DEMAND(CoM_wrt_foot_z > 0);
 
   // create a 3D one-segment polynomial for ExponentialPlusPiecewisePolynomial

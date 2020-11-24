@@ -11,6 +11,7 @@
 #include "examples/Cassie/osc/high_level_command.h"
 #include "examples/Cassie/osc/walking_speed_control.h"
 #include "examples/Cassie/simulator_drift.h"
+#include "multibody/kinematic/fixed_joint_evaluator.h"
 #include "multibody/kinematic/kinematic_evaluator_set.h"
 #include "multibody/multibody_utils.h"
 #include "systems/controllers/fsm_event_time.h"
@@ -61,6 +62,8 @@ using drake::systems::lcm::TriggerTypeSet;
 
 using dairlib::systems::SubvectorPassThrough;
 
+using multibody::FixedJointEvaluator;
+
 using systems::controllers::ComTrackingData;
 using systems::controllers::JointSpaceTrackingData;
 using systems::controllers::RotTaskSpaceTrackingData;
@@ -81,7 +84,7 @@ DEFINE_string(
     "The name of the channel to receive the cassie out structure from.");
 DEFINE_string(gains_filename, "examples/Cassie/osc/osc_walking_gains.yaml",
               "Filepath containing gains");
-DEFINE_bool(publish_osc_data, true,
+DEFINE_bool(publish_osc_data, false,
             "whether to publish lcm messages for OscTrackData");
 DEFINE_bool(print_osc, false, "whether to print the osc debug message or not");
 
@@ -112,7 +115,7 @@ DEFINE_double(penetration_allowance, 1e-5,
 DEFINE_double(end_time, std::numeric_limits<double>::infinity(),
               "End time for simulator");
 DEFINE_double(publish_rate, 1000, "Publish rate for simulator");
-DEFINE_double(init_height, .7,
+DEFINE_double(init_height, 1.0,
               "Initial starting height of the pelvis above "
               "ground");
 
@@ -186,6 +189,9 @@ int DoMain(int argc, char* argv[]) {
 
   ////// Simulator //////
 
+  std::string urdf = "examples/Cassie/urdf/cassie_v2.urdf";
+  // urdf = "examples/Cassie/urdf/cassie_fixed_springs.urdf";
+
   // Plant/System initialization
   DiagramBuilder<double> builder;
   SceneGraph<double>& scene_graph = *builder.AddSystem<SceneGraph>();
@@ -196,45 +202,45 @@ int DoMain(int argc, char* argv[]) {
   if (FLAGS_floating_base) {
     multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
   }
-  addCassieMultibody(&plant, &scene_graph, FLAGS_floating_base,
-                     "examples/Cassie/urdf/cassie_v2.urdf", true, true);
+  addCassieMultibody(&plant, &scene_graph, FLAGS_floating_base, urdf, true,
+                     true);
   plant.Finalize();
 
   plant.set_penetration_allowance(FLAGS_penetration_allowance);
   plant.set_stiction_tolerance(FLAGS_v_stiction);
 
   // Create lcm systems.
-  auto lcm = builder.AddSystem<drake::systems::lcm::LcmInterfaceSystem>();
-  auto input_sub =
-      builder.AddSystem(LcmSubscriberSystem::Make<dairlib::lcmt_robot_input>(
-          "CASSIE_INPUT", lcm));
+  drake::lcm::DrakeLcm lcm_local("udpm://239.255.76.67:7667?ttl=0");
+  //  auto input_sub =
+  //      builder.AddSystem(LcmSubscriberSystem::Make<dairlib::lcmt_robot_input>(
+  //          "CASSIE_INPUT", &lcm_local));
   auto input_receiver = builder.AddSystem<systems::RobotInputReceiver>(plant);
   auto passthrough = builder.AddSystem<SubvectorPassThrough>(
       input_receiver->get_output_port(0).size(), 0,
       plant.get_actuation_input_port().size());
   auto state_pub =
       builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_robot_output>(
-          "CASSIE_STATE_SIMULATION", lcm, 1.0 / FLAGS_publish_rate));
+          "CASSIE_STATE_SIMULATION", &lcm_local, 1.0 / FLAGS_publish_rate));
   auto state_sender = builder.AddSystem<systems::RobotOutputSender>(plant);
 
   // Contact Information
   ContactResultsToLcmSystem<double>& contact_viz =
       *builder.template AddSystem<ContactResultsToLcmSystem<double>>(plant);
   contact_viz.set_name("contact_visualization");
-  auto& contact_results_publisher = *builder.AddSystem(
-      LcmPublisherSystem::Make<drake::lcmt_contact_results_for_viz>(
-          "CASSIE_CONTACT_DRAKE", lcm, 1.0 / FLAGS_publish_rate));
-  contact_results_publisher.set_name("contact_results_publisher");
+  //  auto& contact_results_publisher = *builder.AddSystem(
+  //      LcmPublisherSystem::Make<drake::lcmt_contact_results_for_viz>(
+  //          "CASSIE_CONTACT_DRAKE", &lcm_local, 1.0 / FLAGS_publish_rate));
+  //  contact_results_publisher.set_name("contact_results_publisher");
 
   // Sensor aggregator and publisher of lcmt_cassie_out
-  const auto& sensor_aggregator =
-      AddImuAndAggregator(&builder, plant, passthrough->get_output_port());
-  auto sensor_pub =
-      builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_cassie_out>(
-          "CASSIE_OUTPUT", lcm, 1.0 / FLAGS_publish_rate));
+  //  const auto& sensor_aggregator =
+  //      AddImuAndAggregator(&builder, plant, passthrough->get_output_port());
+  //  auto sensor_pub =
+  //      builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_cassie_out>(
+  //          "CASSIE_OUTPUT", &lcm_local, 1.0 / FLAGS_publish_rate));
 
   // connect leaf systems
-  builder.Connect(*input_sub, *input_receiver);
+  //  builder.Connect(*input_sub, *input_receiver);
   builder.Connect(*input_receiver, *passthrough);
   builder.Connect(passthrough->get_output_port(),
                   plant.get_actuation_input_port());
@@ -248,76 +254,22 @@ int DoMain(int argc, char* argv[]) {
                   plant.get_geometry_query_input_port());
   builder.Connect(plant.get_contact_results_output_port(),
                   contact_viz.get_input_port(0));
-  builder.Connect(contact_viz.get_output_port(0),
-                  contact_results_publisher.get_input_port());
-  builder.Connect(sensor_aggregator.get_output_port(0),
-                  sensor_pub->get_input_port());
-
-  auto diagram = builder.Build();
-
-  // Create a context for this system:
-  std::unique_ptr<Context<double>> diagram_context =
-      diagram->CreateDefaultContext();
-  diagram_context->EnableCaching();
-  diagram->SetDefaultContext(diagram_context.get());
-  Context<double>& plant_context =
-      diagram->GetMutableSubsystemContext(plant, diagram_context.get());
-
-  // Set initial conditions of the simulation
-  VectorXd q_init, u_init, lambda_init;
-  double mu_fp = 0;
-  double min_normal_fp = 70;
-  double toe_spread = .2;
-  // Create a plant for CassieFixedPointSolver.
-  // Note that we cannot use the plant from the above diagram, because after the
-  // diagram is built, plant.get_actuation_input_port().HasValue(*context)
-  // throws a segfault error
-  drake::multibody::MultibodyPlant<double> plant_for_solver(0.0);
-  addCassieMultibody(&plant_for_solver, nullptr,
-                     FLAGS_floating_base /*floating base*/, urdf, true, true);
-  plant_for_solver.Finalize();
-  if (FLAGS_floating_base) {
-    CassieFixedPointSolver(plant_for_solver, FLAGS_init_height, mu_fp,
-                           min_normal_fp, true, toe_spread, &q_init, &u_init,
-                           &lambda_init);
-  } else {
-    CassieFixedBaseFixedPointSolver(plant_for_solver, &q_init, &u_init,
-                                    &lambda_init);
-  }
-  plant.SetPositions(&plant_context, q_init);
-  plant.SetVelocities(&plant_context, VectorXd::Zero(plant.num_velocities()));
-
-  Simulator<double> simulator(*diagram, std::move(diagram_context));
-
-  if (!FLAGS_time_stepping) {
-    // simulator.get_mutable_integrator()->set_maximum_step_size(0.01);
-    // simulator.get_mutable_integrator()->set_target_accuracy(1e-1);
-    // simulator.get_mutable_integrator()->set_fixed_step_mode(true);
-    simulator.reset_integrator<drake::systems::RungeKutta2Integrator<double>>(
-        FLAGS_dt);
-  }
-
-  simulator.set_publish_every_time_step(false);
-  simulator.set_publish_at_initialization(false);
-  simulator.set_target_realtime_rate(FLAGS_target_realtime_rate);
-  simulator.Initialize();
-  simulator.AdvanceTo(FLAGS_end_time);
+  //  builder.Connect(contact_viz.get_output_port(0),
+  //                  contact_results_publisher.get_input_port());
+  //  builder.Connect(sensor_aggregator.get_output_port(0),
+  //                  sensor_pub->get_input_port());
 
   ////// Controller //////
 
   // Build Cassie MBP
   drake::multibody::MultibodyPlant<double> plant_w_spr(0.0);
-  addCassieMultibody(&plant_w_spr, nullptr, true /*floating base*/,
-                     "examples/Cassie/urdf/cassie_v2.urdf",
+  addCassieMultibody(&plant_w_spr, nullptr, true /*floating base*/, urdf,
                      true /*spring model*/, false /*loop closure*/);
   plant_w_spr.Finalize();
 
   auto context_w_spr = plant_w_spr.CreateDefaultContext();
 
   // Build the controller diagram
-  DiagramBuilder<double> builder;
-
-  drake::lcm::DrakeLcm lcm_local("udpm://239.255.76.67:7667?ttl=0");
 
   OSCWalkingGains gains;
   const YAML::Node& root =
@@ -397,20 +349,20 @@ int DoMain(int argc, char* argv[]) {
   // Create state receiver.
   auto state_receiver =
       builder.AddSystem<systems::RobotOutputReceiver>(plant_w_spr);
+  builder.Connect(state_sender->get_output_port(0),
+                  state_receiver->get_input_port(0));
 
   // Create command sender.
-  auto command_pub =
-      builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_robot_input>(
-          FLAGS_channel_u, &lcm_local, TriggerTypeSet({TriggerType::kForced})));
+  //  auto command_pub =
+  //      builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_robot_input>(
+  //          FLAGS_channel_u, &lcm_local,
+  //          TriggerTypeSet({TriggerType::kForced})));
   auto command_sender =
       builder.AddSystem<systems::RobotCommandSender>(plant_w_spr);
-
-  auto cassie_out_receiver =
-      builder.AddSystem(LcmSubscriberSystem::Make<dairlib::lcmt_cassie_out>(
-          FLAGS_cassie_out_channel, &lcm_local));
-
   builder.Connect(command_sender->get_output_port(0),
-                  command_pub->get_input_port());
+                  input_receiver->get_input_port());
+  //  builder.Connect(command_sender->get_output_port(0),
+  //                  command_pub->get_input_port());
 
   // Add emulator for floating base drift
   Eigen::VectorXd drift_mean =
@@ -437,13 +389,16 @@ int DoMain(int argc, char* argv[]) {
   //                     0.9993 when x = 2
   cassie::osc::HighLevelCommand* high_level_command;
   if (FLAGS_use_radio) {
-    double vel_scale_rot = 0.5;
-    double vel_scale_trans = 1.5;
-    high_level_command = builder.AddSystem<cassie::osc::HighLevelCommand>(
-        plant_w_spr, context_w_spr.get(), vel_scale_rot, vel_scale_trans,
-        FLAGS_footstep_option);
-    builder.Connect(cassie_out_receiver->get_output_port(),
-                    high_level_command->get_cassie_output_port());
+    //    auto cassie_out_receiver =
+    //        builder.AddSystem(LcmSubscriberSystem::Make<dairlib::lcmt_cassie_out>(
+    //            FLAGS_cassie_out_channel, &lcm_local));
+    //    double vel_scale_rot = 0.5;
+    //    double vel_scale_trans = 1.5;
+    //    high_level_command = builder.AddSystem<cassie::osc::HighLevelCommand>(
+    //        plant_w_spr, context_w_spr.get(), vel_scale_rot, vel_scale_trans,
+    //        FLAGS_footstep_option);
+    //    builder.Connect(cassie_out_receiver->get_output_port(),
+    //                    high_level_command->get_cassie_output_port());
   } else {
     high_level_command = builder.AddSystem<cassie::osc::HighLevelCommand>(
         plant_w_spr, context_w_spr.get(), global_target_position,
@@ -712,6 +667,8 @@ int DoMain(int argc, char* argv[]) {
   builder.Connect(simulator_drift->get_output_port(0),
                   osc->get_robot_output_input_port());
   builder.Connect(fsm->get_output_port(0), osc->get_fsm_input_port());
+//  builder.Connect(lipm_traj_generator->get_output_port_lipm_from_current(),
+//                  osc->get_tracking_data_input_port("lipm_traj"));
   builder.Connect(lipm_traj_generator->get_output_port_lipm_from_touchdown(),
                   osc->get_tracking_data_input_port("lipm_traj"));
   builder.Connect(swing_ft_traj_generator->get_output_port(0),
@@ -720,23 +677,77 @@ int DoMain(int argc, char* argv[]) {
                   osc->get_tracking_data_input_port("pelvis_heading_traj"));
   builder.Connect(osc->get_output_port(0), command_sender->get_input_port(0));
   if (FLAGS_publish_osc_data) {
-    // Create osc debug sender.
-    auto osc_debug_pub =
-        builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_osc_output>(
-            "OSC_DEBUG_WALKING", &lcm_local,
-            TriggerTypeSet({TriggerType::kForced})));
-    builder.Connect(osc->get_osc_debug_port(), osc_debug_pub->get_input_port());
+    //    // Create osc debug sender.
+    //    auto osc_debug_pub =
+    //        builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_osc_output>(
+    //            "OSC_DEBUG_WALKING", &lcm_local,
+    //            TriggerTypeSet({TriggerType::kForced})));
+    //    builder.Connect(osc->get_osc_debug_port(),
+    //    osc_debug_pub->get_input_port());
   }
 
-  // Create the diagram
-  auto owned_diagram = builder.Build();
-  owned_diagram->set_name("osc walking controller");
+  //////////////////// Build the whole diagram ////////////////////////
 
+  // Create the diagram
+  //  auto owned_diagram = builder.Build();
+  //  owned_diagram->set_name("osc walking controller");
   // Run lcm-driven simulation
-  systems::LcmDrivenLoop<dairlib::lcmt_robot_output> loop(
-      &lcm_local, std::move(owned_diagram), state_receiver, FLAGS_channel_x,
-      true);
-  loop.Simulate();
+  //  systems::LcmDrivenLoop<dairlib::lcmt_robot_output> loop(
+  //      &lcm_local, std::move(owned_diagram), state_receiver, FLAGS_channel_x,
+  //      true);
+  //  loop.Simulate();
+
+  auto diagram = builder.Build();
+
+  // Create a context for this system:
+  std::unique_ptr<Context<double>> diagram_context =
+      diagram->CreateDefaultContext();
+  diagram_context->EnableCaching();
+  diagram->SetDefaultContext(diagram_context.get());
+  Context<double>& plant_context =
+      diagram->GetMutableSubsystemContext(plant, diagram_context.get());
+
+  // Set initial conditions of the simulation
+  VectorXd q_init, u_init, lambda_init;
+  double mu_fp = 0;
+  double min_normal_fp = 70;
+  double toe_spread = .2;
+  // Create a plant for CassieFixedPointSolver.
+  // Note that we cannot use the plant from the above diagram, because after the
+  // diagram is built, plant.get_actuation_input_port().HasValue(*context)
+  // throws a segfault error
+  drake::multibody::MultibodyPlant<double> plant_for_solver(0.0);
+  addCassieMultibody(&plant_for_solver, nullptr,
+                     FLAGS_floating_base /*floating base*/, urdf, true, true);
+  plant_for_solver.Finalize();
+  if (FLAGS_floating_base) {
+    CassieFixedPointSolver(plant_for_solver, FLAGS_init_height, mu_fp,
+                           min_normal_fp, true, toe_spread, &q_init, &u_init,
+                           &lambda_init);
+  } else {
+    CassieFixedBaseFixedPointSolver(plant_for_solver, &q_init, &u_init,
+                                    &lambda_init);
+  }
+  plant.SetPositions(&plant_context, q_init);
+  plant.SetVelocities(&plant_context, VectorXd::Zero(plant.num_velocities()));
+
+  Simulator<double> simulator(*diagram, std::move(diagram_context));
+
+  if (!FLAGS_time_stepping) {
+    // simulator.get_mutable_integrator()->set_maximum_step_size(0.01);
+    // simulator.get_mutable_integrator()->set_target_accuracy(1e-1);
+    // simulator.get_mutable_integrator()->set_fixed_step_mode(true);
+    simulator.reset_integrator<drake::systems::RungeKutta2Integrator<double>>(
+        FLAGS_dt);
+  }
+
+  simulator.set_publish_every_time_step(false);
+  simulator.set_publish_at_initialization(false);
+  simulator.set_target_realtime_rate(FLAGS_target_realtime_rate);
+  cout << "initialize\n";
+  simulator.Initialize();
+  cout << "advanceto\n";
+  simulator.AdvanceTo(FLAGS_end_time);
 
   return 0;
 }
