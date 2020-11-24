@@ -618,8 +618,11 @@ int DoMain(int argc, char* argv[]) {
   swing_foot_traj.AddStateAndPointToTrack(right_stance_state, "toe_left");
   osc->AddTrackingData(&swing_foot_traj);
   // Center of mass tracking
-  ComTrackingData center_of_mass_traj("lipm_traj", K_p_com, K_d_com, W_com,
-                                      plant_w_spr, plant_w_spr);
+//  ComTrackingData center_of_mass_traj("lipm_traj", K_p_com, K_d_com, W_com,
+//                                      plant_w_spr, plant_w_spr);
+  TransTaskSpaceTrackingData center_of_mass_traj("lipm_traj", K_p_com, K_d_com, W_com,
+                                                 plant_w_spr, plant_w_spr);
+  center_of_mass_traj.AddPointToTrack("pelvis");
   osc->AddTrackingData(&center_of_mass_traj);
   // Pelvis rotation tracking (pitch and roll)
   RotTaskSpaceTrackingData pelvis_balance_traj(
@@ -667,8 +670,6 @@ int DoMain(int argc, char* argv[]) {
   builder.Connect(simulator_drift->get_output_port(0),
                   osc->get_robot_output_input_port());
   builder.Connect(fsm->get_output_port(0), osc->get_fsm_input_port());
-//  builder.Connect(lipm_traj_generator->get_output_port_lipm_from_current(),
-//                  osc->get_tracking_data_input_port("lipm_traj"));
   builder.Connect(lipm_traj_generator->get_output_port_lipm_from_touchdown(),
                   osc->get_tracking_data_input_port("lipm_traj"));
   builder.Connect(swing_ft_traj_generator->get_output_port(0),
