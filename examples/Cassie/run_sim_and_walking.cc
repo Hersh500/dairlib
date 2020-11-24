@@ -261,7 +261,7 @@ int DoMain(int argc, char* argv[]) {
   // Zero order hold for the robot input
   //  builder.Connect(passthrough->get_output_port(),
   //                  plant.get_actuation_input_port());
-  double kPeriod = 0.001;
+  double kPeriod = 0.002;
   auto input_zero_order_hold =
       builder.AddSystem<drake::systems::ZeroOrderHold<double>>(
           kPeriod, plant.num_actuators());
@@ -760,6 +760,7 @@ int DoMain(int argc, char* argv[]) {
   simulator.Initialize();
   cout << "advanceto\n";
   simulator.AdvanceTo(FLAGS_end_time);
+  cout << "finished simulating\n";
 
   return 0;
 }
