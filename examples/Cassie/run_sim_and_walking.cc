@@ -35,6 +35,7 @@
 #include "drake/systems/lcm/lcm_interface_system.h"
 #include "drake/systems/lcm/lcm_publisher_system.h"
 #include "drake/systems/lcm/lcm_subscriber_system.h"
+#include "drake/systems/primitives/zero_order_hold.h"
 
 namespace dairlib {
 
@@ -239,11 +240,9 @@ int DoMain(int argc, char* argv[]) {
   //      builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_cassie_out>(
   //          "CASSIE_OUTPUT", &lcm_local, 1.0 / FLAGS_publish_rate));
 
-  // connect leaf systems
+  // Connect leaf systems
   //  builder.Connect(*input_sub, *input_receiver);
   builder.Connect(*input_receiver, *passthrough);
-  builder.Connect(passthrough->get_output_port(),
-                  plant.get_actuation_input_port());
   builder.Connect(plant.get_state_output_port(),
                   state_sender->get_input_port_state());
   builder.Connect(*state_sender, *state_pub);
@@ -258,6 +257,18 @@ int DoMain(int argc, char* argv[]) {
   //                  contact_results_publisher.get_input_port());
   //  builder.Connect(sensor_aggregator.get_output_port(0),
   //                  sensor_pub->get_input_port());
+
+  // Zero order hold for the robot input
+  //  builder.Connect(passthrough->get_output_port(),
+  //                  plant.get_actuation_input_port());
+  double kPeriod = 0.001;
+  auto input_zero_order_hold =
+      builder.AddSystem<drake::systems::ZeroOrderHold<double>>(
+          kPeriod, plant.num_actuators());
+  builder.Connect(passthrough->get_output_port(),
+                  input_zero_order_hold->get_input_port());
+  builder.Connect(input_zero_order_hold->get_output_port(),
+                  plant.get_actuation_input_port());
 
   ////// Controller //////
 
@@ -618,10 +629,10 @@ int DoMain(int argc, char* argv[]) {
   swing_foot_traj.AddStateAndPointToTrack(right_stance_state, "toe_left");
   osc->AddTrackingData(&swing_foot_traj);
   // Center of mass tracking
-//  ComTrackingData center_of_mass_traj("lipm_traj", K_p_com, K_d_com, W_com,
-//                                      plant_w_spr, plant_w_spr);
-  TransTaskSpaceTrackingData center_of_mass_traj("lipm_traj", K_p_com, K_d_com, W_com,
-                                                 plant_w_spr, plant_w_spr);
+  //  ComTrackingData center_of_mass_traj("lipm_traj", K_p_com, K_d_com, W_com,
+  //                                      plant_w_spr, plant_w_spr);
+  TransTaskSpaceTrackingData center_of_mass_traj(
+      "lipm_traj", K_p_com, K_d_com, W_com, plant_w_spr, plant_w_spr);
   center_of_mass_traj.AddPointToTrack("pelvis");
   osc->AddTrackingData(&center_of_mass_traj);
   // Pelvis rotation tracking (pitch and roll)
