@@ -55,7 +55,7 @@ void CassieFixedPointSolver(
 
   auto program = multibody::MultibodyProgram(plant);
 
-  std::cout << "N***** " << evaluators.count_active() << std::endl;
+  // std::cout << "N***** " << evaluators.count_active() << std::endl;
 
   auto positions_map = multibody::makeNameToPositionsMap(plant);
   auto q = program.AddPositionVariables();
@@ -141,10 +141,10 @@ void CassieFixedPointSolver(
   const auto result = drake::solvers::Solve(program, guess);
        auto finish = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> elapsed = finish - start;
-  std::cout << "Solve time:" << elapsed.count() << std::endl;
-
-  std::cout << to_string(result.get_solution_result()) << std::endl;
-  std::cout << "Cost:" << result.get_optimal_cost() << std::endl;
+  //  std::cout << "Solve time:" << elapsed.count() << std::endl;
+  //
+  //  std::cout << to_string(result.get_solution_result()) << std::endl;
+  //  std::cout << "Cost:" << result.get_optimal_cost() << std::endl;
 
   // Draw final pose
   if (visualize_model_urdf != "") {

@@ -85,7 +85,7 @@ DEFINE_string(
     "The name of the channel to receive the cassie out structure from.");
 DEFINE_string(gains_filename, "examples/Cassie/osc/osc_walking_gains.yaml",
               "Filepath containing gains");
-DEFINE_bool(publish_osc_data, false,
+DEFINE_bool(publish_osc_data, true,
             "whether to publish lcm messages for OscTrackData");
 DEFINE_bool(print_osc, false, "whether to print the osc debug message or not");
 
@@ -119,6 +119,16 @@ DEFINE_double(publish_rate, 1000, "Publish rate for simulator");
 DEFINE_double(init_height, 1.0,
               "Initial starting height of the pelvis above "
               "ground");
+
+DEFINE_double(w_swing_foot_x, 400, "");
+DEFINE_double(w_swing_foot_y, 400, "");
+DEFINE_double(w_swing_foot_z, 400, "");
+DEFINE_double(k_p_swing_foot_x, 200, "");
+DEFINE_double(k_p_swing_foot_y, 400, "");
+DEFINE_double(k_p_swing_foot_z, 400, "");
+DEFINE_double(k_d_swing_foot_x, 10, "");
+DEFINE_double(k_d_swing_foot_y, 10, "");
+DEFINE_double(k_d_swing_foot_z, 10, "");
 
 struct OSCWalkingGains {
   int rows;
@@ -192,6 +202,8 @@ int DoMain(int argc, char* argv[]) {
 
   std::string urdf = "examples/Cassie/urdf/cassie_v2.urdf";
   // urdf = "examples/Cassie/urdf/cassie_fixed_springs.urdf";
+
+  drake::logging::set_log_level("err");  // ignore warnings about joint limits
 
   // Plant/System initialization
   DiagramBuilder<double> builder;
@@ -323,7 +335,7 @@ int DoMain(int argc, char* argv[]) {
   MatrixXd K_d_swing_foot = Eigen::Map<
       Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(
       gains.SwingFootKd.data(), gains.rows, gains.cols);
-  std::cout << "w accel: \n" << gains.w_accel << std::endl;
+  /*std::cout << "w accel: \n" << gains.w_accel << std::endl;
   std::cout << "w soft constraint: \n" << gains.w_soft_constraint << std::endl;
   std::cout << "COM W: \n" << W_com << std::endl;
   std::cout << "COM Kp: \n" << K_p_com << std::endl;
@@ -336,7 +348,18 @@ int DoMain(int argc, char* argv[]) {
   std::cout << "Pelvis Balance Kd: \n" << K_d_pelvis_balance << std::endl;
   std::cout << "Swing Foot W: \n" << W_swing_foot << std::endl;
   std::cout << "Swing Foot Kp: \n" << K_p_swing_foot << std::endl;
-  std::cout << "Swing Foot Kd: \n" << K_d_swing_foot << std::endl;
+  std::cout << "Swing Foot Kd: \n" << K_d_swing_foot << std::endl;*/
+
+  // Overwrite gains from flags
+  W_swing_foot(0,0) = FLAGS_w_swing_foot_x;
+  W_swing_foot(1,1) = FLAGS_w_swing_foot_y;
+  W_swing_foot(2,2) = FLAGS_w_swing_foot_z;
+  K_p_swing_foot(0,0) = FLAGS_k_p_swing_foot_x;
+  K_p_swing_foot(1,1) = FLAGS_k_p_swing_foot_y;
+  K_p_swing_foot(2,2) = FLAGS_k_p_swing_foot_z;
+  K_d_swing_foot(0,0) = FLAGS_k_d_swing_foot_x;
+  K_d_swing_foot(1,1) = FLAGS_k_d_swing_foot_y;
+  K_d_swing_foot(2,2) = FLAGS_k_d_swing_foot_z;
 
   // Get contact frames and position (doesn't matter whether we use
   // plant_w_spr or plant_wospr because the contact frames exit in both
@@ -364,16 +387,15 @@ int DoMain(int argc, char* argv[]) {
                   state_receiver->get_input_port(0));
 
   // Create command sender.
-  //  auto command_pub =
-  //      builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_robot_input>(
-  //          FLAGS_channel_u, &lcm_local,
-  //          TriggerTypeSet({TriggerType::kForced})));
+  auto command_pub =
+      builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_robot_input>(
+          FLAGS_channel_u, &lcm_local, 1.0 / FLAGS_publish_rate));
   auto command_sender =
       builder.AddSystem<systems::RobotCommandSender>(plant_w_spr);
   builder.Connect(command_sender->get_output_port(0),
                   input_receiver->get_input_port());
-  //  builder.Connect(command_sender->get_output_port(0),
-  //                  command_pub->get_input_port());
+  builder.Connect(command_sender->get_output_port(0),
+                  command_pub->get_input_port());
 
   // Add emulator for floating base drift
   Eigen::VectorXd drift_mean =
@@ -689,26 +711,14 @@ int DoMain(int argc, char* argv[]) {
                   osc->get_tracking_data_input_port("pelvis_heading_traj"));
   builder.Connect(osc->get_output_port(0), command_sender->get_input_port(0));
   if (FLAGS_publish_osc_data) {
-    //    // Create osc debug sender.
-    //    auto osc_debug_pub =
-    //        builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_osc_output>(
-    //            "OSC_DEBUG_WALKING", &lcm_local,
-    //            TriggerTypeSet({TriggerType::kForced})));
-    //    builder.Connect(osc->get_osc_debug_port(),
-    //    osc_debug_pub->get_input_port());
+    // Create osc debug sender.
+    auto osc_debug_pub =
+        builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_osc_output>(
+            "OSC_DEBUG_WALKING", &lcm_local, 1.0 / FLAGS_publish_rate));
+    builder.Connect(osc->get_osc_debug_port(), osc_debug_pub->get_input_port());
   }
 
   //////////////////// Build the whole diagram ////////////////////////
-
-  // Create the diagram
-  //  auto owned_diagram = builder.Build();
-  //  owned_diagram->set_name("osc walking controller");
-  // Run lcm-driven simulation
-  //  systems::LcmDrivenLoop<dairlib::lcmt_robot_output> loop(
-  //      &lcm_local, std::move(owned_diagram), state_receiver, FLAGS_channel_x,
-  //      true);
-  //  loop.Simulate();
-
   auto diagram = builder.Build();
 
   // Create a context for this system:
