@@ -159,6 +159,9 @@ struct OSCWalkingGains {
   double final_foot_height;
   double final_foot_velocity_z;
   double lipm_height;
+  double SwingFootW_scale;
+  double SwingFootKp_scale;
+  double SwingFootKd_scale;
 
   template <typename Archive>
   void Serialize(Archive* a) {
@@ -192,6 +195,10 @@ struct OSCWalkingGains {
     a->Visit(DRAKE_NVP(final_foot_velocity_z));
     // lipm heursitics
     a->Visit(DRAKE_NVP(lipm_height));
+    // Scales
+    a->Visit(DRAKE_NVP(SwingFootW_scale));
+    a->Visit(DRAKE_NVP(SwingFootKp_scale));
+    a->Visit(DRAKE_NVP(SwingFootKd_scale));
   }
 };
 
@@ -335,6 +342,18 @@ int DoMain(int argc, char* argv[]) {
   MatrixXd K_d_swing_foot = Eigen::Map<
       Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(
       gains.SwingFootKd.data(), gains.rows, gains.cols);
+
+  // Overwrite gains from flags
+  W_swing_foot(0,0) = FLAGS_w_swing_foot_x;
+  W_swing_foot(1,1) = FLAGS_w_swing_foot_y;
+  W_swing_foot(2,2) = FLAGS_w_swing_foot_z;
+  K_p_swing_foot(0,0) = FLAGS_k_p_swing_foot_x;
+  K_p_swing_foot(1,1) = FLAGS_k_p_swing_foot_y;
+  K_p_swing_foot(2,2) = FLAGS_k_p_swing_foot_z;
+  K_d_swing_foot(0,0) = FLAGS_k_d_swing_foot_x;
+  K_d_swing_foot(1,1) = FLAGS_k_d_swing_foot_y;
+  K_d_swing_foot(2,2) = FLAGS_k_d_swing_foot_z;
+
   /*std::cout << "w accel: \n" << gains.w_accel << std::endl;
   std::cout << "w soft constraint: \n" << gains.w_soft_constraint << std::endl;
   std::cout << "COM W: \n" << W_com << std::endl;
@@ -349,17 +368,6 @@ int DoMain(int argc, char* argv[]) {
   std::cout << "Swing Foot W: \n" << W_swing_foot << std::endl;
   std::cout << "Swing Foot Kp: \n" << K_p_swing_foot << std::endl;
   std::cout << "Swing Foot Kd: \n" << K_d_swing_foot << std::endl;*/
-
-  // Overwrite gains from flags
-  W_swing_foot(0,0) = FLAGS_w_swing_foot_x;
-  W_swing_foot(1,1) = FLAGS_w_swing_foot_y;
-  W_swing_foot(2,2) = FLAGS_w_swing_foot_z;
-  K_p_swing_foot(0,0) = FLAGS_k_p_swing_foot_x;
-  K_p_swing_foot(1,1) = FLAGS_k_p_swing_foot_y;
-  K_p_swing_foot(2,2) = FLAGS_k_p_swing_foot_z;
-  K_d_swing_foot(0,0) = FLAGS_k_d_swing_foot_x;
-  K_d_swing_foot(1,1) = FLAGS_k_d_swing_foot_y;
-  K_d_swing_foot(2,2) = FLAGS_k_d_swing_foot_z;
 
   // Get contact frames and position (doesn't matter whether we use
   // plant_w_spr or plant_wospr because the contact frames exit in both

@@ -57,6 +57,9 @@ PelvisHeadingKd:
       0,     0,    0,
       0,     0,    2]
 
+SwingFootW_scale: 100
+SwingFootKp_scale: 100
+SwingFootKd_scale: 10
 SwingFootW:
   [ 400,    0,     0,
     0,  400,     0,

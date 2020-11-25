@@ -23,24 +23,25 @@ from pydairlib.cassie.cassie_utils import *
 import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 
 
+# (done) TODO: learn how to read the output files and how to see the solution history
+# TODO: avoid negative gains (can we add constraints? otherwise add it to cost)
+# TODO: need to handle error (stop lcm-logger)
+# TODO: need suppress lcmlogger message
+# TODO: now you can use global variable, you can multithread this (you can specify the channels to listen to)
+
+# TODO: Can probably add noise and add delay to the simulation
+
 def obj_func(x):
-  # Unpack args
-  # plant = args[0]
-  # pos_map = args[1]
-  # vel_map = args[2]
-  # act_map = args[3]
-
-  # Build MBP
-  pydrake.common.set_log_level("err")
-  builder = DiagramBuilder()
-  plant, scene_graph = AddMultibodyPlantSceneGraph(builder, 0.0)
-  pydairlib.cassie.cassie_utils.addCassieMultibody(plant, scene_graph, True,
-    "examples/Cassie/urdf/cassie_v2.urdf", False, False)
-  plant.Finalize()
-
-  pos_map = pydairlib.multibody.makeNameToPositionsMap(plant)
-  vel_map = pydairlib.multibody.makeNameToVelocitiesMap(plant)
-  act_map = pydairlib.multibody.makeNameToActuatorsMap(plant)
+  gains = 9 * [0]
+  gains[0] = x[0] * yaml_gains['SwingFootW_scale']
+  gains[1] = x[1] * yaml_gains['SwingFootW_scale']
+  gains[2] = x[2] * yaml_gains['SwingFootW_scale']
+  gains[3] = x[3] * yaml_gains['SwingFootKp_scale']
+  gains[4] = x[4] * yaml_gains['SwingFootKp_scale']
+  gains[5] = x[5] * yaml_gains['SwingFootKp_scale']
+  gains[6] = x[6] * yaml_gains['SwingFootKd_scale']
+  gains[7] = x[7] * yaml_gains['SwingFootKd_scale']
+  gains[8] = x[8] * yaml_gains['SwingFootKd_scale']
 
   log_path = 'testlog'
   logger_cmd = ['lcm-logger',
@@ -50,15 +51,15 @@ def obj_func(x):
   simulation_cmd = ['bazel-bin/examples/Cassie/run_sim_and_walking',
                     '--end_time=5',
                     '--publish_rate=100',
-                    '--w_swing_foot_x=%.1f' % x[0],
-                    '--w_swing_foot_y=%.1f' % x[1],
-                    '--w_swing_foot_z=%.1f' % x[2],
-                    '--k_p_swing_foot_x=%.1f' % x[3],
-                    '--k_p_swing_foot_y=%.1f' % x[4],
-                    '--k_p_swing_foot_z=%.1f' % x[5],
-                    '--k_d_swing_foot_x=%.1f' % x[6],
-                    '--k_d_swing_foot_y=%.1f' % x[7],
-                    '--k_d_swing_foot_z=%.1f' % x[8],
+                    '--w_swing_foot_x=%.1f' % gains[0],
+                    '--w_swing_foot_y=%.1f' % gains[1],
+                    '--w_swing_foot_z=%.1f' % gains[2],
+                    '--k_p_swing_foot_x=%.1f' % gains[3],
+                    '--k_p_swing_foot_y=%.1f' % gains[4],
+                    '--k_p_swing_foot_z=%.1f' % gains[5],
+                    '--k_d_swing_foot_x=%.1f' % gains[6],
+                    '--k_d_swing_foot_y=%.1f' % gains[7],
+                    '--k_d_swing_foot_z=%.1f' % gains[8],
                     ]
   logger_process = subprocess.Popen(logger_cmd)
   simulation_process = subprocess.Popen(simulation_cmd)
@@ -94,93 +95,67 @@ def obj_func(x):
   # effort cost
   total_cost += np.sum(np.multiply(u / 1000, u / 1000))
 
-  print(total_cost)
-
-  # import pdb;
-  # pdb.set_trace()
+  global sample_idx
+  sample_idx = sample_idx + 1
+  print("sample #" + str(sample_idx) + ", total_cost = " + str(total_cost))
 
   return total_cost
-  # return 1 + np.sum((x - np.pi) ** 2)
 
 
 def main():
+  # Build MBP
+  global plant, pos_map, vel_map, act_map
+  pydrake.common.set_log_level("err")
+  builder = DiagramBuilder()
+  plant, scene_graph = AddMultibodyPlantSceneGraph(builder, 0.0)
+  pydairlib.cassie.cassie_utils.addCassieMultibody(plant, scene_graph, True,
+    "examples/Cassie/urdf/cassie_v2.urdf", False, False)
+  plant.Finalize()
+
+  pos_map = pydairlib.multibody.makeNameToPositionsMap(plant)
+  vel_map = pydairlib.multibody.makeNameToVelocitiesMap(plant)
+  act_map = pydairlib.multibody.makeNameToActuatorsMap(plant)
+
   # Read in gains from yaml
+  global yaml_gains
   with open('examples/Cassie/osc/osc_walking_gains.yaml') as f:
-    my_dict = yaml.safe_load(f)
+    yaml_gains = yaml.safe_load(f)
 
   # Initial guess
   x_init = 9 * [0]
-  x_init[0] = my_dict['SwingFootW'][0]
-  x_init[1] = my_dict['SwingFootW'][4]
-  x_init[2] = my_dict['SwingFootW'][8]
-  x_init[3] = my_dict['SwingFootKp'][0]
-  x_init[4] = my_dict['SwingFootKp'][4]
-  x_init[5] = my_dict['SwingFootKp'][8]
-  x_init[6] = my_dict['SwingFootKd'][0]
-  x_init[7] = my_dict['SwingFootKd'][4]
-  x_init[8] = my_dict['SwingFootKd'][8]
+  x_init[0] = yaml_gains['SwingFootW'][0] / yaml_gains['SwingFootW_scale']
+  x_init[1] = yaml_gains['SwingFootW'][4] / yaml_gains['SwingFootW_scale']
+  x_init[2] = yaml_gains['SwingFootW'][8] / yaml_gains['SwingFootW_scale']
+  x_init[3] = yaml_gains['SwingFootKp'][0] / yaml_gains['SwingFootKp_scale']
+  x_init[4] = yaml_gains['SwingFootKp'][4] / yaml_gains['SwingFootKp_scale']
+  x_init[5] = yaml_gains['SwingFootKp'][8] / yaml_gains['SwingFootKp_scale']
+  x_init[6] = yaml_gains['SwingFootKd'][0] / yaml_gains['SwingFootKd_scale']
+  x_init[7] = yaml_gains['SwingFootKd'][4] / yaml_gains['SwingFootKd_scale']
+  x_init[8] = yaml_gains['SwingFootKd'][8] / yaml_gains['SwingFootKd_scale']
 
   # Construct CMA
-  sigma_init = 5
+  sigma_init = 1
   es = cma.CMAEvolutionStrategy(x_init, sigma_init, {'popsize': 12})
 
   # Testing
   # obj_func(x_init)
 
   # Optimize
+  global sample_idx
+  sample_idx = -1
   start = time.time()
   es.optimize(obj_func, n_jobs=1)
   end = time.time()
   print("solve time = " + str(end - start))
   print()
 
-  # es.result_pretty()
+  es.result_pretty()
 
-  # print(es.popsize)
-  # print(es.opts)
+  print(es.popsize)
+  print(es.opts)
 
-  # import pdb; pdb.set_trace()
-
-
-def reference_func():
-  filename = FindResourceOrThrow(
-    '../dairlib_data/goldilocks_models/find_models/robot_1/dircon_trajectory')
-
-  dircon_traj = pydairlib.lcm_trajectory.DirconTrajectory(filename)
-
-  # For saving figures
-  global save_path
-  import getpass
-  username = getpass.getuser()
-  save_path = "/home/" + username + "/"
-
-  # Build MBP
-  global plant, context, world, nq, nv, nx, nu
-  builder = DiagramBuilder()
-  plant, _ = AddMultibodyPlantSceneGraph(builder, 0.0)
-  Parser(plant).AddModelFromFile(
-    FindResourceOrThrow("examples/Cassie/urdf/cassie_v2.urdf"))
-  plant.mutable_gravity_field().set_gravity_vector(-9.81 * np.array([0, 0, 1]))
-  plant.Finalize()
-
-  # Conext and world
-  context = plant.CreateDefaultContext()
-  world = plant.world_frame()
-  global l_toe_frame, r_toe_frame
-  global front_contact_disp, rear_contact_disp
-  global l_loop_closure, r_loop_closure
-  l_toe_frame = plant.GetBodyByName("toe_left").body_frame()
-  r_toe_frame = plant.GetBodyByName("toe_right").body_frame()
-  front_contact_disp = np.array((-0.0457, 0.112, 0))
-  rear_contact_disp = np.array((0.088, 0, 0))
-  l_loop_closure = LeftLoopClosureEvaluator(plant)
-  r_loop_closure = RightLoopClosureEvaluator(plant)
-
-  # MBP params
-  nq = plant.num_positions()
-  nv = plant.num_velocities()
-  nx = plant.num_positions() + plant.num_velocities()
-  nu = plant.num_actuators()
+  import pdb;
+  pdb.set_trace()
 
 
 if __name__ == "__main__":
