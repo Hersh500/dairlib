@@ -774,11 +774,11 @@ int DoMain(int argc, char* argv[]) {
   simulator.set_publish_every_time_step(false);
   simulator.set_publish_at_initialization(false);
   simulator.set_target_realtime_rate(FLAGS_target_realtime_rate);
-  cout << "initialize\n";
+//  cout << "initialize\n";
   simulator.Initialize();
-  cout << "advanceto\n";
+//  cout << "advanceto\n";
   simulator.AdvanceTo(FLAGS_end_time);
-  cout << "finished simulating\n";
+//  cout << "finished simulating\n";
 
   return 0;
 }

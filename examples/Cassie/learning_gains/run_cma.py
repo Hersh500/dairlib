@@ -2,11 +2,12 @@ import cma  # https://github.com/CMA-ES/pycma
 import subprocess
 import time
 import numpy as np
-from scipy.interpolate import CubicSpline
 import lcm
 import sys
 import yaml
+import pdb
 import matplotlib.pyplot as plt
+from scipy.interpolate import CubicSpline
 
 import pydrake
 from pydrake.trajectories import PiecewisePolynomial
@@ -23,11 +24,9 @@ from pydairlib.cassie.cassie_utils import *
 import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 
 
-# (done) TODO: learn how to read the output files and how to see the solution history
+# (seems to be fine now) TODO: need to handle error (stop lcm-logger)
 # TODO: avoid negative gains (can we add constraints? otherwise add it to cost)
-# TODO: need to handle error (stop lcm-logger)
-# TODO: need suppress lcmlogger message
-# TODO: now you can use global variable, you can multithread this (you can specify the channels to listen to)
+# TODO: now you can use global variable, you can multithread this (you can specify the channels to listen to). Also, need to check how to change output files' names
 
 # TODO: Can probably add noise and add delay to the simulation
 
@@ -46,11 +45,13 @@ def obj_func(x):
   log_path = 'testlog'
   logger_cmd = ['lcm-logger',
                 '-f',
+                '--quiet',
                 '%s' % log_path,
                 ]
   simulation_cmd = ['bazel-bin/examples/Cassie/run_sim_and_walking',
                     '--end_time=5',
                     '--publish_rate=100',
+                    '--target_realtime_rate=10',
                     '--w_swing_foot_x=%.1f' % gains[0],
                     '--w_swing_foot_y=%.1f' % gains[1],
                     '--w_swing_foot_z=%.1f' % gains[2],
@@ -79,21 +80,24 @@ def obj_func(x):
 
   # tracking cost
   # TODO: need to fix the bug in error_y quaternioin (pelvis_balance_traj and pelvis_heading_traj)
-  err = osc_debug['swing_ft_traj'].error_y
-  total_cost += 5 * np.sum(np.multiply(err, err))
-  err = osc_debug['lipm_traj'].error_y
-  total_cost += np.sum(np.multiply(err[:, 2], err[:, 2]))
-  err = osc_debug['pelvis_balance_traj'].error_y
-  total_cost += np.sum(np.multiply(err[:, :3], err[:, :3]))
-  err = osc_debug['swing_toe_traj'].error_y
-  total_cost += np.sum(np.multiply(err, err))
-  err = osc_debug['swing_hip_yaw_traj'].error_y
-  total_cost += np.sum(np.multiply(err, err))
-  err = osc_debug['pelvis_heading_traj'].error_y
-  total_cost += np.sum(np.multiply(err[:, :3], err[:, :3]))
+  try:
+    err = osc_debug['swing_ft_traj'].error_y
+    total_cost += 5 * np.sum(np.multiply(err, err))
+    err = osc_debug['lipm_traj'].error_y
+    total_cost += np.sum(np.multiply(err[:, 2], err[:, 2]))
+    err = osc_debug['pelvis_balance_traj'].error_y
+    total_cost += np.sum(np.multiply(err[:, :3], err[:, :3]))
+    err = osc_debug['swing_toe_traj'].error_y
+    total_cost += np.sum(np.multiply(err, err))
+    err = osc_debug['swing_hip_yaw_traj'].error_y
+    total_cost += np.sum(np.multiply(err, err))
+    err = osc_debug['pelvis_heading_traj'].error_y
+    total_cost += np.sum(np.multiply(err[:, :3], err[:, :3]))
 
-  # effort cost
-  total_cost += np.sum(np.multiply(u / 1000, u / 1000))
+    # effort cost
+    total_cost += np.sum(np.multiply(u / 1000, u / 1000))
+  except:
+    total_cost = 1000
 
   global sample_idx
   sample_idx = sample_idx + 1
@@ -154,7 +158,6 @@ def main():
   print(es.popsize)
   print(es.opts)
 
-  import pdb;
   pdb.set_trace()
 
 
