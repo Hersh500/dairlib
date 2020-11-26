@@ -6,6 +6,8 @@ import lcm
 import sys
 import yaml
 import pdb
+from shutil import copyfile
+from pathlib import Path
 import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline
 
@@ -38,6 +40,9 @@ import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 
 def obj_func(x):
   global sample_idx
+  # sample_idx_in_this_iteration = sample_idx % popsize
+  sample_idx_in_this_iteration = 0
+  sample_idx = sample_idx + 1
 
   gains = param_dim * [0]
   gains[0] = x[0] * yaml_gains['w_accel']
@@ -70,13 +75,14 @@ def obj_func(x):
   gains[27] = x[27] * yaml_gains['SwingFootKd'][4]
   gains[28] = x[28] * yaml_gains['SwingFootKd'][8]
 
-  log_path = 'testlog'
+  log_path = dir + 'testlog' + str(sample_idx_in_this_iteration)
   logger_cmd = ['lcm-logger',
                 '-f',
                 '--quiet',
                 '%s' % log_path,
                 ]
   simulation_cmd = ['bazel-bin/examples/Cassie/run_sim_and_walking',
+                    '--sample_idx=%d' % sample_idx_in_this_iteration,
                     '--end_time=5',
                     '--publish_rate=100',
                     '--target_realtime_rate=10',
@@ -124,7 +130,7 @@ def obj_func(x):
   x, u_meas, t_x, u, t_u, contact_info, contact_info_locs, t_contact_info, \
   osc_debug, fsm, estop_signal, switch_signal, t_controller_switch, t_pd, kp, kd, cassie_out, u_pd, t_u_pd, \
   osc_output, full_log = process_lcm_log.process_log(log, pos_map, vel_map,
-    act_map, "CASSIE_INPUT")
+    act_map, "___", sample_idx_in_this_iteration)
 
   # tracking cost
   # TODO: need to fix the bug in error_y quaternioin (pelvis_balance_traj and pelvis_heading_traj)
@@ -155,21 +161,24 @@ def obj_func(x):
     # TODO: check if lcm-logger could miss data when data rate is high
     total_cost = 1000
 
-  sample_idx = sample_idx + 1
-  print("sample #" + str(sample_idx) + ", total_cost = " + str(total_cost))
-
+  # print("sample #" + str(sample_idx) + ", total_cost = " + str(total_cost))
   return total_cost
 
 
 def main():
   # Settings
-  global domain_randomization
+  global domain_randomization, dir
   domain_randomization = False
+  dir = "../dairlib_data/cassie_cma/"
 
   # Parameters
   global param_dim, popsize
   param_dim = 29
   popsize = param_dim * 2
+  # popsize = 3
+
+  # Create folder
+  Path(dir).mkdir(parents=True, exist_ok=True)
 
   # Build MBP
   global plant, pos_map, vel_map, act_map
@@ -188,19 +197,11 @@ def main():
   global yaml_gains
   with open('examples/Cassie/osc/osc_walking_gains.yaml') as f:
     yaml_gains = yaml.safe_load(f)
+  copyfile("examples/Cassie/osc/osc_walking_gains.yaml",
+    dir + "osc_walking_gains.yaml")
 
   # Initial guess
   x_init = param_dim * [1]
-
-  # x_init[0] = 3.960
-  # x_init[1] = 7.932
-  # x_init[2] = 4.223
-  # x_init[3] = 1.542
-  # x_init[4] = 2.215
-  # x_init[5] = 5.196
-  # x_init[6] = 0.276
-  # x_init[7] = 2.943
-  # x_init[8] = 0.556
 
   # Construct CMA
   sigma_init = 0.2
@@ -211,19 +212,12 @@ def main():
   # Testing
   # obj_func(x_init)
 
-  pdb.set_trace()
-
   # Optimize
-  start = time.time()
   es.optimize(obj_func, n_jobs=1)
-  end = time.time()
-  print("solve time = " + str(end - start) + "\n")
-
   es.result_pretty()
 
   print(es.popsize)
   print(es.opts)
-
   pdb.set_trace()
 
 

@@ -150,6 +150,8 @@ DEFINE_double(k_d_swing_foot_x, 10, "");
 DEFINE_double(k_d_swing_foot_y, 10, "");
 DEFINE_double(k_d_swing_foot_z, 10, "");
 
+DEFINE_int32(sample_idx, -1, "");
+
 struct OSCWalkingGains {
   int rows;
   int cols;
@@ -225,6 +227,11 @@ struct OSCWalkingGains {
 int DoMain(int argc, char* argv[]) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
+  std::string suffix = "";
+  if (FLAGS_sample_idx >= 0) {
+    suffix = std::to_string(FLAGS_sample_idx);
+  }
+
   ////// Simulator //////
 
   std::string urdf = "examples/Cassie/urdf/cassie_v2.urdf";
@@ -260,7 +267,7 @@ int DoMain(int argc, char* argv[]) {
       plant.get_actuation_input_port().size());
   auto state_pub =
       builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_robot_output>(
-          "CASSIE_STATE_SIMULATION", &lcm_local, 1.0 / FLAGS_publish_rate));
+          "CASSIE_STATE_SIMULATION" + suffix, &lcm_local, 1.0 / FLAGS_publish_rate));
   auto state_sender = builder.AddSystem<systems::RobotOutputSender>(plant);
 
   // Contact Information
@@ -269,7 +276,7 @@ int DoMain(int argc, char* argv[]) {
   contact_viz.set_name("contact_visualization");
   //  auto& contact_results_publisher = *builder.AddSystem(
   //      LcmPublisherSystem::Make<drake::lcmt_contact_results_for_viz>(
-  //          "CASSIE_CONTACT_DRAKE", &lcm_local, 1.0 / FLAGS_publish_rate));
+  //          "CASSIE_CONTACT_DRAKE" + suffix, &lcm_local, 1.0 / FLAGS_publish_rate));
   //  contact_results_publisher.set_name("contact_results_publisher");
 
   // Sensor aggregator and publisher of lcmt_cassie_out
@@ -277,7 +284,7 @@ int DoMain(int argc, char* argv[]) {
   //      AddImuAndAggregator(&builder, plant, passthrough->get_output_port());
   //  auto sensor_pub =
   //      builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_cassie_out>(
-  //          "CASSIE_OUTPUT", &lcm_local, 1.0 / FLAGS_publish_rate));
+  //          "CASSIE_OUTPUT" + suffix, &lcm_local, 1.0 / FLAGS_publish_rate));
 
   // Connect leaf systems
   //  builder.Connect(*input_sub, *input_receiver);
@@ -394,7 +401,7 @@ int DoMain(int argc, char* argv[]) {
   K_d_swing_foot(1,1) = FLAGS_k_d_swing_foot_y;
   K_d_swing_foot(2,2) = FLAGS_k_d_swing_foot_z;
 
-  std::cout << "w accel: " << gains.w_accel << std::endl;
+  /*std::cout << "w accel: " << gains.w_accel << std::endl;
   std::cout << "w soft constraint: " << gains.w_soft_constraint << std::endl;
   std::cout << "w_swing_toe: " << gains.w_swing_toe << std::endl;
   std::cout << "swing_toe_kp: " << gains.swing_toe_kp << std::endl;
@@ -413,7 +420,7 @@ int DoMain(int argc, char* argv[]) {
   std::cout << "Pelvis Balance Kd: \n" << K_d_pelvis_balance << std::endl;
   std::cout << "Swing Foot W: \n" << W_swing_foot << std::endl;
   std::cout << "Swing Foot Kp: \n" << K_p_swing_foot << std::endl;
-  std::cout << "Swing Foot Kd: \n" << K_d_swing_foot << std::endl;
+  std::cout << "Swing Foot Kd: \n" << K_d_swing_foot << std::endl;*/
 
   // Get contact frames and position (doesn't matter whether we use
   // plant_w_spr or plant_wospr because the contact frames exit in both
@@ -443,7 +450,7 @@ int DoMain(int argc, char* argv[]) {
   // Create command sender.
   auto command_pub =
       builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_robot_input>(
-          FLAGS_channel_u, &lcm_local, 1.0 / FLAGS_publish_rate));
+          FLAGS_channel_u + suffix, &lcm_local, 1.0 / FLAGS_publish_rate));
   auto command_sender =
       builder.AddSystem<systems::RobotCommandSender>(plant_w_spr);
   builder.Connect(command_sender->get_output_port(0),
@@ -478,7 +485,7 @@ int DoMain(int argc, char* argv[]) {
   if (FLAGS_use_radio) {
     //    auto cassie_out_receiver =
     //        builder.AddSystem(LcmSubscriberSystem::Make<dairlib::lcmt_cassie_out>(
-    //            FLAGS_cassie_out_channel, &lcm_local));
+    //            FLAGS_cassie_out_channel + suffix, &lcm_local));
     //    double vel_scale_rot = 0.5;
     //    double vel_scale_trans = 1.5;
     //    high_level_command = builder.AddSystem<cassie::osc::HighLevelCommand>(
@@ -768,7 +775,7 @@ int DoMain(int argc, char* argv[]) {
     // Create osc debug sender.
     auto osc_debug_pub =
         builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_osc_output>(
-            "OSC_DEBUG_WALKING", &lcm_local, 1.0 / FLAGS_publish_rate));
+            "OSC_DEBUG_WALKING" + suffix, &lcm_local, 1.0 / FLAGS_publish_rate));
     builder.Connect(osc->get_osc_debug_port(), osc_debug_pub->get_input_port());
   }
 

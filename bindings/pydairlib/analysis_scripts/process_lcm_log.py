@@ -47,7 +47,11 @@ class lcmt_osc_tracking_data_t:
     self.yddot_command_sol = np.array(self.yddot_command_sol)
 
 
-def process_log(log, pos_map, vel_map, act_map, controller_channel):
+def process_log(log, pos_map, vel_map, act_map, controller_channel, sample_idx=-1):
+  suffix = ""
+  if sample_idx >= 0:
+    suffix = str(sample_idx)
+
   t_x = []
   t_u = []
   t_controller_switch = []
@@ -91,7 +95,7 @@ def process_log(log, pos_map, vel_map, act_map, controller_channel):
         unknown_types.add(event.channel)
     if event.channel in full_log:
       full_log[event.channel].append(channel_to_type_map[event.channel].decode(event.data))
-    if event.channel == "CASSIE_STATE_SIMULATION":
+    if event.channel == "CASSIE_STATE_SIMULATION" + suffix:
       msg = dairlib.lcmt_robot_output.decode(event.data)
       q_temp = [[] for i in range(len(msg.position))]
       v_temp = [[] for i in range(len(msg.velocity))]
@@ -107,7 +111,7 @@ def process_log(log, pos_map, vel_map, act_map, controller_channel):
       u_meas.append(u_temp)
       t_x.append(msg.utime / 1e6)
     # if event.channel == "CASSIE_INPUT" or event.channel == "PD_CONTROL":
-    if event.channel == "CASSIE_INPUT" or event.channel == controller_channel:
+    if event.channel == ("CASSIE_INPUT" + suffix) or event.channel == controller_channel:
       msg = dairlib.lcmt_robot_input.decode(event.data)
       u.append(msg.efforts)
       t_u.append(msg.utime / 1e6)
@@ -127,7 +131,7 @@ def process_log(log, pos_map, vel_map, act_map, controller_channel):
     if event.channel == "CASSIE_OUTPUT_ECHO":
       msg = dairlib.lcmt_cassie_out.decode(event.data)
       cassie_out.append(msg)
-    if event.channel == "OSC_DEBUG_WALKING":
+    if event.channel == "OSC_DEBUG_WALKING" + suffix:
       msg = dairlib.lcmt_osc_output.decode(event.data)
       osc_output.append(msg)
       num_osc_tracking_data = len(msg.tracking_data)
