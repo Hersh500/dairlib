@@ -120,6 +120,26 @@ DEFINE_double(init_height, 1.0,
               "Initial starting height of the pelvis above "
               "ground");
 
+DEFINE_double(w_accel, 0.000001, "");
+DEFINE_double(w_soft_constraint, 8000, "");
+DEFINE_double(w_swing_toe, 100, "");
+DEFINE_double(swing_toe_kp, 20, "");
+DEFINE_double(swing_toe_kd, 15, "");
+DEFINE_double(w_hip_yaw, 100, "");
+DEFINE_double(hip_yaw_kp, 100, "");
+DEFINE_double(hip_yaw_kd, 10, "");
+DEFINE_double(w_com_z, 10, "");
+DEFINE_double(k_p_com_z, 400, "");
+DEFINE_double(k_d_com_z, 400, "");
+DEFINE_double(w_pelvis_balance_x, 400, "");
+DEFINE_double(w_pelvis_balance_y, 200, "");
+DEFINE_double(k_p_pelvis_balance_x, 400, "");
+DEFINE_double(k_p_pelvis_balance_y, 400, "");
+DEFINE_double(k_d_pelvis_balance_x, 10, "");
+DEFINE_double(k_d_pelvis_balance_y, 10, "");
+DEFINE_double(w_pelvis_heading_z, 10, "");
+DEFINE_double(k_p_pelvis_heading_z, 10, "");
+DEFINE_double(k_d_pelvis_heading_z, 10, "");
 DEFINE_double(w_swing_foot_x, 400, "");
 DEFINE_double(w_swing_foot_y, 400, "");
 DEFINE_double(w_swing_foot_z, 400, "");
@@ -344,6 +364,26 @@ int DoMain(int argc, char* argv[]) {
       gains.SwingFootKd.data(), gains.rows, gains.cols);
 
   // Overwrite gains from flags
+  gains.w_accel = FLAGS_w_accel;
+  gains.w_soft_constraint = FLAGS_w_soft_constraint;
+  gains.w_swing_toe = FLAGS_w_swing_toe;
+  gains.swing_toe_kp = FLAGS_swing_toe_kp;
+  gains.swing_toe_kd = FLAGS_swing_toe_kd;
+  gains.w_hip_yaw = FLAGS_w_hip_yaw;
+  gains.hip_yaw_kp = FLAGS_hip_yaw_kp;
+  gains.hip_yaw_kd = FLAGS_hip_yaw_kd;
+  W_com(2,2) = FLAGS_w_com_z;
+  K_p_com(2,2) = FLAGS_k_p_com_z;
+  K_d_com(2,2) = FLAGS_k_d_com_z;
+  W_pelvis_balance(0,0) = FLAGS_w_pelvis_balance_x;
+  W_pelvis_balance(1,1) = FLAGS_w_pelvis_balance_y;
+  K_p_pelvis_balance(0,0) = FLAGS_k_p_pelvis_balance_x;
+  K_p_pelvis_balance(1,1) = FLAGS_k_p_pelvis_balance_y;
+  K_d_pelvis_balance(0,0) = FLAGS_k_d_pelvis_balance_x;
+  K_d_pelvis_balance(1,1) = FLAGS_k_d_pelvis_balance_y;
+  W_pelvis_heading(2,2) = FLAGS_w_pelvis_heading_z;
+  K_p_pelvis_heading(2,2) = FLAGS_k_p_pelvis_heading_z;
+  K_d_pelvis_heading(2,2) = FLAGS_k_d_pelvis_heading_z;
   W_swing_foot(0,0) = FLAGS_w_swing_foot_x;
   W_swing_foot(1,1) = FLAGS_w_swing_foot_y;
   W_swing_foot(2,2) = FLAGS_w_swing_foot_z;
@@ -354,8 +394,14 @@ int DoMain(int argc, char* argv[]) {
   K_d_swing_foot(1,1) = FLAGS_k_d_swing_foot_y;
   K_d_swing_foot(2,2) = FLAGS_k_d_swing_foot_z;
 
-  /*std::cout << "w accel: \n" << gains.w_accel << std::endl;
-  std::cout << "w soft constraint: \n" << gains.w_soft_constraint << std::endl;
+  std::cout << "w accel: " << gains.w_accel << std::endl;
+  std::cout << "w soft constraint: " << gains.w_soft_constraint << std::endl;
+  std::cout << "w_swing_toe: " << gains.w_swing_toe << std::endl;
+  std::cout << "swing_toe_kp: " << gains.swing_toe_kp << std::endl;
+  std::cout << "swing_toe_kd: " << gains.swing_toe_kd << std::endl;
+  std::cout << "w_hip_yaw: " << gains.w_hip_yaw << std::endl;
+  std::cout << "hip_yaw_kp: " << gains.hip_yaw_kp << std::endl;
+  std::cout << "hip_yaw_kd: " << gains.hip_yaw_kd << std::endl;
   std::cout << "COM W: \n" << W_com << std::endl;
   std::cout << "COM Kp: \n" << K_p_com << std::endl;
   std::cout << "COM Kd: \n" << K_d_com << std::endl;
@@ -367,7 +413,7 @@ int DoMain(int argc, char* argv[]) {
   std::cout << "Pelvis Balance Kd: \n" << K_d_pelvis_balance << std::endl;
   std::cout << "Swing Foot W: \n" << W_swing_foot << std::endl;
   std::cout << "Swing Foot Kp: \n" << K_p_swing_foot << std::endl;
-  std::cout << "Swing Foot Kd: \n" << K_d_swing_foot << std::endl;*/
+  std::cout << "Swing Foot Kd: \n" << K_d_swing_foot << std::endl;
 
   // Get contact frames and position (doesn't matter whether we use
   // plant_w_spr or plant_wospr because the contact frames exit in both

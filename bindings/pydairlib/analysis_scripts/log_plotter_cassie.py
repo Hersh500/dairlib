@@ -105,21 +105,21 @@ def main():
   ### All plotting scripts here
   plot_state(x, t_x, u, t_u, x_datatypes, u_datatypes)
 
-  plot_contact_est(full_log)
-  plt.plot(t_u[t_u_slice], fsm[t_u_slice])
-  if True:
-    plot_feet_positions(plant_w_spr, context, x, l_toe_frame,
-                        front_contact_disp,
-                        world, t_x, t_slice, "left_", "_front")
-    plot_feet_positions(plant_w_spr, context, x, r_toe_frame,
-                        front_contact_disp,
-                        world, t_x, t_slice, "right_", "_front")
-    plot_feet_positions(plant_w_spr, context, x, l_toe_frame,
-                        rear_contact_disp,
-                        world, t_x, t_slice, "left_", "_rear")
-    plot_feet_positions(plant_w_spr, context, x, r_toe_frame,
-                        rear_contact_disp,
-                        world, t_x, t_slice, "right_", "_rear")
+  # plot_contact_est(full_log)
+  # plt.plot(t_u[t_u_slice], fsm[t_u_slice])
+  # if True:
+  #   plot_feet_positions(plant_w_spr, context, x, l_toe_frame,
+  #                       front_contact_disp,
+  #                       world, t_x, t_slice, "left_", "_front")
+  #   plot_feet_positions(plant_w_spr, context, x, r_toe_frame,
+  #                       front_contact_disp,
+  #                       world, t_x, t_slice, "right_", "_front")
+  #   plot_feet_positions(plant_w_spr, context, x, l_toe_frame,
+  #                       rear_contact_disp,
+  #                       world, t_x, t_slice, "left_", "_rear")
+  #   plot_feet_positions(plant_w_spr, context, x, r_toe_frame,
+  #                       rear_contact_disp,
+  #                       world, t_x, t_slice, "right_", "_rear")
 
   plot_osc_debug(t_u, fsm, osc_debug, t_cassie_out, estop_signal, osc_output)
   plt.show()
@@ -196,17 +196,17 @@ def plot_osc_debug(t_u, fsm, osc_debug, t_cassie_out, estop_signal, osc_output):
   osc_traj3 = "swing_hip_yaw_traj"
 
   #
-  # plot_osc(osc_debug, osc_traj0, 0, "pos")
+  plot_osc(osc_debug, osc_traj0, 0, "pos")
   # plt.plot(osc_debug[osc_traj1].t[t_u_slice], fsm[t_u_slice])
   # plot_osc(osc_debug, osc_traj0, 1, "pos")
   # plot_osc(osc_debug, osc_traj0, 2, "pos")
   # plt.plot(osc_debug[osc_traj1].t[t_u_slice], fsm[t_u_slice])
   #
-  # plot_osc(osc_debug, osc_traj0, 0, "vel")
+  plot_osc(osc_debug, osc_traj0, 0, "vel")
   # plot_osc(osc_debug, osc_traj0, 1, "vel")
   # plot_osc(osc_debug, osc_traj0, 2, "vel")
   #
-  # plot_osc(osc_debug, osc_traj0, 0, "accel")
+  plot_osc(osc_debug, osc_traj0, 0, "accel")
   # plot_osc(osc_debug, osc_traj0, 1, "accel")
   # plot_osc(osc_debug, osc_traj0, 2, "accel")
 
@@ -345,6 +345,7 @@ def plot_state(x, t_x, u, t_u, x_datatypes, u_datatypes):
   pos_indices = slice(0,7)
   # vel_indices = slice(23, 23 + 6)
   u_indices = slice(6, 8)
+  # u_indices = slice(0, 10)
   # overwrite
   # pos_indices = [pos_map["knee_joint_right"], pos_map["ankle_spring_joint_right"]]
   # pos_indices = tuple(slice(x) for x in pos_indices)

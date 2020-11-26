@@ -26,21 +26,49 @@ import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 
 # (seems to be fine now) TODO: need to handle error (stop lcm-logger)
 # TODO: avoid negative gains (can we add constraints? otherwise add it to cost)
-# TODO: now you can use global variable, you can multithread this (you can specify the channels to listen to). Also, need to check how to change output files' names
+# TODO: now you can use global variable, you can multithread this (you can specify the channels to listen to).
+# (don't need this, cause there is only one cma outer-loop) TODO: Also, need to check how to change output files' names
+# TODO: run one lcm-logger per channel name
+
+# TODO: make the termination condition looser (sigma can be 5e-3)
+
+# TODO fix the bug in swing foot desired traj when fsm switching
 
 # TODO: Can probably add noise and add delay to the simulation
 
 def obj_func(x):
-  gains = 9 * [0]
-  gains[0] = x[0] * yaml_gains['SwingFootW_scale']
-  gains[1] = x[1] * yaml_gains['SwingFootW_scale']
-  gains[2] = x[2] * yaml_gains['SwingFootW_scale']
-  gains[3] = x[3] * yaml_gains['SwingFootKp_scale']
-  gains[4] = x[4] * yaml_gains['SwingFootKp_scale']
-  gains[5] = x[5] * yaml_gains['SwingFootKp_scale']
-  gains[6] = x[6] * yaml_gains['SwingFootKd_scale']
-  gains[7] = x[7] * yaml_gains['SwingFootKd_scale']
-  gains[8] = x[8] * yaml_gains['SwingFootKd_scale']
+  global sample_idx
+
+  gains = param_dim * [0]
+  gains[0] = x[0] * yaml_gains['w_accel']
+  gains[1] = x[1] * yaml_gains['w_soft_constraint']
+  gains[2] = x[2] * yaml_gains['w_swing_toe']
+  gains[3] = x[3] * yaml_gains['swing_toe_kp']
+  gains[4] = x[4] * yaml_gains['swing_toe_kd']
+  gains[5] = x[5] * yaml_gains['w_hip_yaw']
+  gains[6] = x[6] * yaml_gains['hip_yaw_kp']
+  gains[7] = x[7] * yaml_gains['hip_yaw_kd']
+  gains[8] = x[8] * yaml_gains['CoMW'][8]
+  gains[9] = x[9] * yaml_gains['CoMKp'][8]
+  gains[10] = x[10] * yaml_gains['CoMKd'][8]
+  gains[11] = x[11] * yaml_gains['PelvisBalanceW'][0]
+  gains[12] = x[12] * yaml_gains['PelvisBalanceW'][4]
+  gains[13] = x[13] * yaml_gains['PelvisBalanceKp'][0]
+  gains[14] = x[14] * yaml_gains['PelvisBalanceKp'][4]
+  gains[15] = x[15] * yaml_gains['PelvisBalanceKd'][0]
+  gains[16] = x[16] * yaml_gains['PelvisBalanceKd'][4]
+  gains[17] = x[17] * yaml_gains['PelvisHeadingW'][8]
+  gains[18] = x[18] * yaml_gains['PelvisHeadingKp'][8]
+  gains[19] = x[19] * yaml_gains['PelvisHeadingKd'][8]
+  gains[20] = x[20] * yaml_gains['SwingFootW'][0]
+  gains[21] = x[21] * yaml_gains['SwingFootW'][4]
+  gains[22] = x[22] * yaml_gains['SwingFootW'][8]
+  gains[23] = x[23] * yaml_gains['SwingFootKp'][0]
+  gains[24] = x[24] * yaml_gains['SwingFootKp'][4]
+  gains[25] = x[25] * yaml_gains['SwingFootKp'][8]
+  gains[26] = x[26] * yaml_gains['SwingFootKd'][0]
+  gains[27] = x[27] * yaml_gains['SwingFootKd'][4]
+  gains[28] = x[28] * yaml_gains['SwingFootKd'][8]
 
   log_path = 'testlog'
   logger_cmd = ['lcm-logger',
@@ -52,15 +80,35 @@ def obj_func(x):
                     '--end_time=5',
                     '--publish_rate=100',
                     '--target_realtime_rate=10',
-                    '--w_swing_foot_x=%.1f' % gains[0],
-                    '--w_swing_foot_y=%.1f' % gains[1],
-                    '--w_swing_foot_z=%.1f' % gains[2],
-                    '--k_p_swing_foot_x=%.1f' % gains[3],
-                    '--k_p_swing_foot_y=%.1f' % gains[4],
-                    '--k_p_swing_foot_z=%.1f' % gains[5],
-                    '--k_d_swing_foot_x=%.1f' % gains[6],
-                    '--k_d_swing_foot_y=%.1f' % gains[7],
-                    '--k_d_swing_foot_z=%.1f' % gains[8],
+                    '--w_accel=%.8f' % gains[0],
+                    '--w_soft_constraint=%.2f' % gains[1],
+                    '--w_swing_toe=%.2f' % gains[2],
+                    '--swing_toe_kp=%.2f' % gains[3],
+                    '--swing_toe_kd=%.2f' % gains[4],
+                    '--w_hip_yaw=%.2f' % gains[5],
+                    '--hip_yaw_kp=%.2f' % gains[6],
+                    '--hip_yaw_kd=%.2f' % gains[7],
+                    '--w_com_z=%.2f' % gains[8],
+                    '--k_p_com_z=%.2f' % gains[9],
+                    '--k_d_com_z=%.2f' % gains[10],
+                    '--w_pelvis_balance_x=%.2f' % gains[11],
+                    '--w_pelvis_balance_y=%.2f' % gains[12],
+                    '--k_p_pelvis_balance_x=%.2f' % gains[13],
+                    '--k_p_pelvis_balance_y=%.2f' % gains[14],
+                    '--k_d_pelvis_balance_x=%.2f' % gains[15],
+                    '--k_d_pelvis_balance_y=%.2f' % gains[16],
+                    '--w_pelvis_heading_z=%.2f' % gains[17],
+                    '--k_p_pelvis_heading_z=%.2f' % gains[18],
+                    '--k_d_pelvis_heading_z=%.2f' % gains[19],
+                    '--w_swing_foot_x=%.2f' % gains[20],
+                    '--w_swing_foot_y=%.2f' % gains[21],
+                    '--w_swing_foot_z=%.2f' % gains[22],
+                    '--k_p_swing_foot_x=%.2f' % gains[23],
+                    '--k_p_swing_foot_y=%.2f' % gains[24],
+                    '--k_p_swing_foot_z=%.2f' % gains[25],
+                    '--k_d_swing_foot_x=%.2f' % gains[26],
+                    '--k_d_swing_foot_y=%.2f' % gains[27],
+                    '--k_d_swing_foot_z=%.2f' % gains[28],
                     ]
   logger_process = subprocess.Popen(logger_cmd)
   simulation_process = subprocess.Popen(simulation_cmd)
@@ -83,23 +131,30 @@ def obj_func(x):
   try:
     err = osc_debug['swing_ft_traj'].error_y
     total_cost += 5 * np.sum(np.multiply(err, err))
+    err = osc_debug['swing_ft_traj'].error_ydot
+    total_cost += 5 * 1 / 400 * np.sum(np.multiply(err, err))
     err = osc_debug['lipm_traj'].error_y
     total_cost += np.sum(np.multiply(err[:, 2], err[:, 2]))
     err = osc_debug['pelvis_balance_traj'].error_y
     total_cost += np.sum(np.multiply(err[:, :3], err[:, :3]))
     err = osc_debug['swing_toe_traj'].error_y
     total_cost += np.sum(np.multiply(err, err))
+    err = osc_debug['swing_toe_traj'].error_ydot
+    total_cost += 1 / 400 * np.sum(np.multiply(err, err))
     err = osc_debug['swing_hip_yaw_traj'].error_y
     total_cost += np.sum(np.multiply(err, err))
+    err = osc_debug['swing_hip_yaw_traj'].error_ydot
+    total_cost += 1 / 400 * np.sum(np.multiply(err, err))
     err = osc_debug['pelvis_heading_traj'].error_y
     total_cost += np.sum(np.multiply(err[:, :3], err[:, :3]))
 
     # effort cost
     total_cost += np.sum(np.multiply(u / 1000, u / 1000))
   except:
+    # There could be missing trajs when simulation terminates early
+    # TODO: check if lcm-logger could miss data when data rate is high
     total_cost = 1000
 
-  global sample_idx
   sample_idx = sample_idx + 1
   print("sample #" + str(sample_idx) + ", total_cost = " + str(total_cost))
 
@@ -107,6 +162,15 @@ def obj_func(x):
 
 
 def main():
+  # Settings
+  global domain_randomization
+  domain_randomization = False
+
+  # Parameters
+  global param_dim, popsize
+  param_dim = 29
+  popsize = param_dim * 2
+
   # Build MBP
   global plant, pos_map, vel_map, act_map
   pydrake.common.set_log_level("err")
@@ -126,32 +190,34 @@ def main():
     yaml_gains = yaml.safe_load(f)
 
   # Initial guess
-  x_init = 9 * [0]
-  x_init[0] = yaml_gains['SwingFootW'][0] / yaml_gains['SwingFootW_scale']
-  x_init[1] = yaml_gains['SwingFootW'][4] / yaml_gains['SwingFootW_scale']
-  x_init[2] = yaml_gains['SwingFootW'][8] / yaml_gains['SwingFootW_scale']
-  x_init[3] = yaml_gains['SwingFootKp'][0] / yaml_gains['SwingFootKp_scale']
-  x_init[4] = yaml_gains['SwingFootKp'][4] / yaml_gains['SwingFootKp_scale']
-  x_init[5] = yaml_gains['SwingFootKp'][8] / yaml_gains['SwingFootKp_scale']
-  x_init[6] = yaml_gains['SwingFootKd'][0] / yaml_gains['SwingFootKd_scale']
-  x_init[7] = yaml_gains['SwingFootKd'][4] / yaml_gains['SwingFootKd_scale']
-  x_init[8] = yaml_gains['SwingFootKd'][8] / yaml_gains['SwingFootKd_scale']
+  x_init = param_dim * [1]
+
+  # x_init[0] = 3.960
+  # x_init[1] = 7.932
+  # x_init[2] = 4.223
+  # x_init[3] = 1.542
+  # x_init[4] = 2.215
+  # x_init[5] = 5.196
+  # x_init[6] = 0.276
+  # x_init[7] = 2.943
+  # x_init[8] = 0.556
 
   # Construct CMA
-  sigma_init = 1
-  es = cma.CMAEvolutionStrategy(x_init, sigma_init, {'popsize': 12})
+  sigma_init = 0.2
+  es = cma.CMAEvolutionStrategy(x_init, sigma_init, {'popsize': popsize})
+  global sample_idx
+  sample_idx = 0
 
   # Testing
   # obj_func(x_init)
 
+  pdb.set_trace()
+
   # Optimize
-  global sample_idx
-  sample_idx = -1
   start = time.time()
   es.optimize(obj_func, n_jobs=1)
   end = time.time()
-  print("solve time = " + str(end - start))
-  print()
+  print("solve time = " + str(end - start) + "\n")
 
   es.result_pretty()
 
