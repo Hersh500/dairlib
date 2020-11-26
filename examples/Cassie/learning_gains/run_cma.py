@@ -41,12 +41,10 @@ import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 # TODO: Can probably add noise and add delay to the simulation
 
 def obj_func(x):
-  global sample_index
-  # sample_id = sample_index % popsize
-  sample_index = sample_index + 1
   sample_id = ""
-  for i in range(10):
-    sample_id += str(randrange(10))
+  if not save_log:
+    for i in range(10):
+      sample_id += str(randrange(10))
 
   # initialize gain
   cost = 0
@@ -139,7 +137,6 @@ def obj_func(x):
 
     # Compute cost
     log = lcm.EventLog(log_path, "r")
-    os.remove(log_path)
     x, u_meas, t_x, u, t_u, contact_info, contact_info_locs, t_contact_info, \
     osc_debug, fsm, estop_signal, switch_signal, t_controller_switch, t_pd, kp, kd, cassie_out, u_pd, t_u_pd, \
     osc_output, full_log = process_lcm_log.process_log(log, pos_map, vel_map,
@@ -174,7 +171,12 @@ def obj_func(x):
       # TODO: check if lcm-logger could miss data when data rate is high
       cost = 1000
 
-  print("sample #" + str(sample_index) + ", cost = " + str(cost))
+    # Delete log file
+    if save_log:
+      copyfile(log_path, dir + time.ctime())
+    os.remove(log_path)
+
+  print("cost = " + str(cost))
   return cost
 
 
@@ -183,6 +185,7 @@ def main():
   global domain_randomization, dir
   domain_randomization = False
   dir = "../dairlib_data/cassie_cma/"
+  n_theads = 6
 
   # Parameters
   global param_dim, popsize
@@ -214,22 +217,26 @@ def main():
     dir + "osc_walking_gains.yaml")
 
   # Initial guess
-  x_init = param_dim * [1]
+  x_init = param_dim * [1.0]
 
   # Construct CMA
   sigma_init = 0.5
   es = cma.CMAEvolutionStrategy(x_init, sigma_init, {'popsize': popsize})
-  global sample_index
-  sample_index = 0
 
   # Save the initial log
-  # obj_func(x_init)
-  # copyfile(dir + 'testlog0', dir + 'first_iter')
-  # sample_index = 0
+  global save_log
+  save_log = True
+  obj_func(x_init)
+  save_log = False
 
   # Optimize
-  es.optimize(obj_func, n_jobs=6)
+  es.optimize(obj_func, n_jobs=n_theads)
   es.result_pretty()
+
+  # Save the log of the best solution
+  save_log = True
+  obj_func(es.result.xbest.tolist())
+  save_log = False
 
   print(es.popsize)
   print(es.opts)
