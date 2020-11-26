@@ -44,6 +44,10 @@ def obj_func(x):
   sample_idx_in_this_iteration = 0
   sample_idx = sample_idx + 1
 
+  # initialize gain
+  cost = 0
+
+  # Scale gains
   gains = param_dim * [0]
   gains[0] = x[0] * yaml_gains['w_accel']
   gains[1] = x[1] * yaml_gains['w_soft_constraint']
@@ -75,94 +79,100 @@ def obj_func(x):
   gains[27] = x[27] * yaml_gains['SwingFootKd'][4]
   gains[28] = x[28] * yaml_gains['SwingFootKd'][8]
 
-  log_path = dir + 'testlog' + str(sample_idx_in_this_iteration)
-  logger_cmd = ['lcm-logger',
-                '-f',
-                '--quiet',
-                '%s' % log_path,
-                ]
-  simulation_cmd = ['bazel-bin/examples/Cassie/run_sim_and_walking',
-                    '--sample_idx=%d' % sample_idx_in_this_iteration,
-                    '--end_time=5',
-                    '--publish_rate=100',
-                    '--target_realtime_rate=10',
-                    '--w_accel=%.8f' % gains[0],
-                    '--w_soft_constraint=%.2f' % gains[1],
-                    '--w_swing_toe=%.2f' % gains[2],
-                    '--swing_toe_kp=%.2f' % gains[3],
-                    '--swing_toe_kd=%.2f' % gains[4],
-                    '--w_hip_yaw=%.2f' % gains[5],
-                    '--hip_yaw_kp=%.2f' % gains[6],
-                    '--hip_yaw_kd=%.2f' % gains[7],
-                    '--w_com_z=%.2f' % gains[8],
-                    '--k_p_com_z=%.2f' % gains[9],
-                    '--k_d_com_z=%.2f' % gains[10],
-                    '--w_pelvis_balance_x=%.2f' % gains[11],
-                    '--w_pelvis_balance_y=%.2f' % gains[12],
-                    '--k_p_pelvis_balance_x=%.2f' % gains[13],
-                    '--k_p_pelvis_balance_y=%.2f' % gains[14],
-                    '--k_d_pelvis_balance_x=%.2f' % gains[15],
-                    '--k_d_pelvis_balance_y=%.2f' % gains[16],
-                    '--w_pelvis_heading_z=%.2f' % gains[17],
-                    '--k_p_pelvis_heading_z=%.2f' % gains[18],
-                    '--k_d_pelvis_heading_z=%.2f' % gains[19],
-                    '--w_swing_foot_x=%.2f' % gains[20],
-                    '--w_swing_foot_y=%.2f' % gains[21],
-                    '--w_swing_foot_z=%.2f' % gains[22],
-                    '--k_p_swing_foot_x=%.2f' % gains[23],
-                    '--k_p_swing_foot_y=%.2f' % gains[24],
-                    '--k_p_swing_foot_z=%.2f' % gains[25],
-                    '--k_d_swing_foot_x=%.2f' % gains[26],
-                    '--k_d_swing_foot_y=%.2f' % gains[27],
-                    '--k_d_swing_foot_z=%.2f' % gains[28],
-                    ]
-  logger_process = subprocess.Popen(logger_cmd)
-  simulation_process = subprocess.Popen(simulation_cmd)
+  # Penalize negative weights
+  for i in range(param_dim):
+    if gains[i] < 0:
+      cost += 500
 
-  while simulation_process.poll() is None:  # while subprocess is alive
-    time.sleep(1)
-  logger_process.kill()
+  if cost != 0:
+    print("nagative parameters")
+  else:
+    log_path = dir + 'testlog' + str(sample_idx_in_this_iteration)
+    logger_cmd = ['lcm-logger',
+                  '-f',
+                  '--quiet',
+                  '%s' % log_path,
+                  ]
+    simulation_cmd = ['bazel-bin/examples/Cassie/run_sim_and_walking',
+                      '--sample_idx=%d' % sample_idx_in_this_iteration,
+                      '--end_time=5',
+                      '--publish_rate=100',
+                      '--target_realtime_rate=10',
+                      '--w_accel=%.8f' % gains[0],
+                      '--w_soft_constraint=%.2f' % gains[1],
+                      '--w_swing_toe=%.2f' % gains[2],
+                      '--swing_toe_kp=%.2f' % gains[3],
+                      '--swing_toe_kd=%.2f' % gains[4],
+                      '--w_hip_yaw=%.2f' % gains[5],
+                      '--hip_yaw_kp=%.2f' % gains[6],
+                      '--hip_yaw_kd=%.2f' % gains[7],
+                      '--w_com_z=%.2f' % gains[8],
+                      '--k_p_com_z=%.2f' % gains[9],
+                      '--k_d_com_z=%.2f' % gains[10],
+                      '--w_pelvis_balance_x=%.2f' % gains[11],
+                      '--w_pelvis_balance_y=%.2f' % gains[12],
+                      '--k_p_pelvis_balance_x=%.2f' % gains[13],
+                      '--k_p_pelvis_balance_y=%.2f' % gains[14],
+                      '--k_d_pelvis_balance_x=%.2f' % gains[15],
+                      '--k_d_pelvis_balance_y=%.2f' % gains[16],
+                      '--w_pelvis_heading_z=%.2f' % gains[17],
+                      '--k_p_pelvis_heading_z=%.2f' % gains[18],
+                      '--k_d_pelvis_heading_z=%.2f' % gains[19],
+                      '--w_swing_foot_x=%.2f' % gains[20],
+                      '--w_swing_foot_y=%.2f' % gains[21],
+                      '--w_swing_foot_z=%.2f' % gains[22],
+                      '--k_p_swing_foot_x=%.2f' % gains[23],
+                      '--k_p_swing_foot_y=%.2f' % gains[24],
+                      '--k_p_swing_foot_z=%.2f' % gains[25],
+                      '--k_d_swing_foot_x=%.2f' % gains[26],
+                      '--k_d_swing_foot_y=%.2f' % gains[27],
+                      '--k_d_swing_foot_z=%.2f' % gains[28],
+                      ]
+    logger_process = subprocess.Popen(logger_cmd)
+    simulation_process = subprocess.Popen(simulation_cmd)
 
-  # Get cost
-  total_cost = 0
+    while simulation_process.poll() is None:  # while subprocess is alive
+      time.sleep(1)
+    logger_process.kill()
 
-  log = lcm.EventLog(log_path, "r")
-  x, u_meas, t_x, u, t_u, contact_info, contact_info_locs, t_contact_info, \
-  osc_debug, fsm, estop_signal, switch_signal, t_controller_switch, t_pd, kp, kd, cassie_out, u_pd, t_u_pd, \
-  osc_output, full_log = process_lcm_log.process_log(log, pos_map, vel_map,
-    act_map, "___", sample_idx_in_this_iteration)
+    # Compute cost
+    log = lcm.EventLog(log_path, "r")
+    x, u_meas, t_x, u, t_u, contact_info, contact_info_locs, t_contact_info, \
+    osc_debug, fsm, estop_signal, switch_signal, t_controller_switch, t_pd, kp, kd, cassie_out, u_pd, t_u_pd, \
+    osc_output, full_log = process_lcm_log.process_log(log, pos_map, vel_map,
+      act_map, "___", sample_idx_in_this_iteration)
 
-  # tracking cost
-  # TODO: need to fix the bug in error_y quaternioin (pelvis_balance_traj and pelvis_heading_traj)
-  try:
-    err = osc_debug['swing_ft_traj'].error_y
-    total_cost += 5 * np.sum(np.multiply(err, err))
-    err = osc_debug['swing_ft_traj'].error_ydot
-    total_cost += 5 * 1 / 400 * np.sum(np.multiply(err, err))
-    err = osc_debug['lipm_traj'].error_y
-    total_cost += np.sum(np.multiply(err[:, 2], err[:, 2]))
-    err = osc_debug['pelvis_balance_traj'].error_y
-    total_cost += np.sum(np.multiply(err[:, :3], err[:, :3]))
-    err = osc_debug['swing_toe_traj'].error_y
-    total_cost += np.sum(np.multiply(err, err))
-    err = osc_debug['swing_toe_traj'].error_ydot
-    total_cost += 1 / 400 * np.sum(np.multiply(err, err))
-    err = osc_debug['swing_hip_yaw_traj'].error_y
-    total_cost += np.sum(np.multiply(err, err))
-    err = osc_debug['swing_hip_yaw_traj'].error_ydot
-    total_cost += 1 / 400 * np.sum(np.multiply(err, err))
-    err = osc_debug['pelvis_heading_traj'].error_y
-    total_cost += np.sum(np.multiply(err[:, :3], err[:, :3]))
+    # tracking cost
+    # TODO: need to fix the bug in error_y quaternioin (pelvis_balance_traj and pelvis_heading_traj)
+    try:
+      err = osc_debug['swing_ft_traj'].error_y
+      cost += 5 * np.sum(np.multiply(err, err))
+      err = osc_debug['swing_ft_traj'].error_ydot
+      cost += 5 * 1 / 400 * np.sum(np.multiply(err, err))
+      err = osc_debug['lipm_traj'].error_y
+      cost += np.sum(np.multiply(err[:, 2], err[:, 2]))
+      err = osc_debug['pelvis_balance_traj'].error_y
+      cost += np.sum(np.multiply(err[:, :3], err[:, :3]))
+      err = osc_debug['swing_toe_traj'].error_y
+      cost += np.sum(np.multiply(err, err))
+      err = osc_debug['swing_toe_traj'].error_ydot
+      cost += 1 / 400 * np.sum(np.multiply(err, err))
+      err = osc_debug['swing_hip_yaw_traj'].error_y
+      cost += np.sum(np.multiply(err, err))
+      err = osc_debug['swing_hip_yaw_traj'].error_ydot
+      cost += 1 / 400 * np.sum(np.multiply(err, err))
+      err = osc_debug['pelvis_heading_traj'].error_y
+      cost += np.sum(np.multiply(err[:, :3], err[:, :3]))
 
-    # effort cost
-    total_cost += np.sum(np.multiply(u / 1000, u / 1000))
-  except:
-    # There could be missing trajs when simulation terminates early
-    # TODO: check if lcm-logger could miss data when data rate is high
-    total_cost = 1000
+      # effort cost
+      cost += np.sum(np.multiply(u / 1000, u / 1000))
+    except:
+      # There could be missing trajs when simulation terminates early
+      # TODO: check if lcm-logger could miss data when data rate is high
+      cost = 1000
 
-  # print("sample #" + str(sample_idx) + ", total_cost = " + str(total_cost))
-  return total_cost
+  print("sample #" + str(sample_idx) + ", cost = " + str(cost))
+  return cost
 
 
 def main():
@@ -204,13 +214,15 @@ def main():
   x_init = param_dim * [1]
 
   # Construct CMA
-  sigma_init = 0.2
+  sigma_init = 0.5
   es = cma.CMAEvolutionStrategy(x_init, sigma_init, {'popsize': popsize})
   global sample_idx
   sample_idx = 0
 
-  # Testing
-  # obj_func(x_init)
+  # Save the initial log
+  obj_func(x_init)
+  copyfile(dir + 'testlog0', dir + 'first_iter')
+  sample_idx = 0
 
   # Optimize
   es.optimize(obj_func, n_jobs=1)
