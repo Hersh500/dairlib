@@ -27,11 +27,8 @@ from pydairlib.multibody.kinematic import DistanceEvaluator
 from pydairlib.cassie.cassie_utils import *
 import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 
-
-# (seems to be fine now) TODO: need to handle error (stop lcm-logger)
+# TODO: check each term of the cost and potentially save them
 # TODO: avoid negative gains (can we add constraints? otherwise add it to cost)
-# TODO: now you can use global variable, you can multithread this (you can specify the channels to listen to).
-# (don't need this, cause there is only one cma outer-loop) TODO: Also, need to check how to change output files' names
 # TODO: run one lcm-logger per channel name
 
 # TODO: make the termination condition looser (sigma can be 5e-3)
@@ -39,6 +36,8 @@ import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 # TODO fix the bug in swing foot desired traj when fsm switching
 
 # TODO: Can probably add noise and add delay to the simulation
+
+# TODO: check if lcm-logger could miss data when data rate is high and when doing multithreading
 
 def obj_func(x):
   sample_id = ""
@@ -168,7 +167,6 @@ def obj_func(x):
       cost += np.sum(np.multiply(u / 1000, u / 1000))
     except:
       # There could be missing trajs when simulation terminates early
-      # TODO: check if lcm-logger could miss data when data rate is high
       cost = 1000
 
     # Delete log file
