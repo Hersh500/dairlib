@@ -150,7 +150,7 @@ DEFINE_double(k_d_swing_foot_x, 10, "");
 DEFINE_double(k_d_swing_foot_y, 10, "");
 DEFINE_double(k_d_swing_foot_z, 10, "");
 
-DEFINE_int32(sample_idx, -1, "");
+DEFINE_string(sample_id, "", "");
 
 struct OSCWalkingGains {
   int rows;
@@ -227,10 +227,11 @@ struct OSCWalkingGains {
 int DoMain(int argc, char* argv[]) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-  std::string suffix = "";
-  if (FLAGS_sample_idx >= 0) {
-    suffix = std::to_string(FLAGS_sample_idx);
-  }
+  std::string suffix = FLAGS_sample_id;
+  //  std::string suffix = "";
+  //  if (FLAGS_sample_idx >= 0) {
+  //    suffix = std::to_string(FLAGS_sample_idx);
+  //  }
 
   ////// Simulator //////
 
@@ -267,7 +268,8 @@ int DoMain(int argc, char* argv[]) {
       plant.get_actuation_input_port().size());
   auto state_pub =
       builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_robot_output>(
-          "CASSIE_STATE_SIMULATION" + suffix, &lcm_local, 1.0 / FLAGS_publish_rate));
+          "CASSIE_STATE_SIMULATION" + suffix, &lcm_local,
+          1.0 / FLAGS_publish_rate));
   auto state_sender = builder.AddSystem<systems::RobotOutputSender>(plant);
 
   // Contact Information
@@ -276,7 +278,8 @@ int DoMain(int argc, char* argv[]) {
   contact_viz.set_name("contact_visualization");
   //  auto& contact_results_publisher = *builder.AddSystem(
   //      LcmPublisherSystem::Make<drake::lcmt_contact_results_for_viz>(
-  //          "CASSIE_CONTACT_DRAKE" + suffix, &lcm_local, 1.0 / FLAGS_publish_rate));
+  //          "CASSIE_CONTACT_DRAKE" + suffix, &lcm_local, 1.0 /
+  //          FLAGS_publish_rate));
   //  contact_results_publisher.set_name("contact_results_publisher");
 
   // Sensor aggregator and publisher of lcmt_cassie_out
@@ -379,27 +382,27 @@ int DoMain(int argc, char* argv[]) {
   gains.w_hip_yaw = FLAGS_w_hip_yaw;
   gains.hip_yaw_kp = FLAGS_hip_yaw_kp;
   gains.hip_yaw_kd = FLAGS_hip_yaw_kd;
-  W_com(2,2) = FLAGS_w_com_z;
-  K_p_com(2,2) = FLAGS_k_p_com_z;
-  K_d_com(2,2) = FLAGS_k_d_com_z;
-  W_pelvis_balance(0,0) = FLAGS_w_pelvis_balance_x;
-  W_pelvis_balance(1,1) = FLAGS_w_pelvis_balance_y;
-  K_p_pelvis_balance(0,0) = FLAGS_k_p_pelvis_balance_x;
-  K_p_pelvis_balance(1,1) = FLAGS_k_p_pelvis_balance_y;
-  K_d_pelvis_balance(0,0) = FLAGS_k_d_pelvis_balance_x;
-  K_d_pelvis_balance(1,1) = FLAGS_k_d_pelvis_balance_y;
-  W_pelvis_heading(2,2) = FLAGS_w_pelvis_heading_z;
-  K_p_pelvis_heading(2,2) = FLAGS_k_p_pelvis_heading_z;
-  K_d_pelvis_heading(2,2) = FLAGS_k_d_pelvis_heading_z;
-  W_swing_foot(0,0) = FLAGS_w_swing_foot_x;
-  W_swing_foot(1,1) = FLAGS_w_swing_foot_y;
-  W_swing_foot(2,2) = FLAGS_w_swing_foot_z;
-  K_p_swing_foot(0,0) = FLAGS_k_p_swing_foot_x;
-  K_p_swing_foot(1,1) = FLAGS_k_p_swing_foot_y;
-  K_p_swing_foot(2,2) = FLAGS_k_p_swing_foot_z;
-  K_d_swing_foot(0,0) = FLAGS_k_d_swing_foot_x;
-  K_d_swing_foot(1,1) = FLAGS_k_d_swing_foot_y;
-  K_d_swing_foot(2,2) = FLAGS_k_d_swing_foot_z;
+  W_com(2, 2) = FLAGS_w_com_z;
+  K_p_com(2, 2) = FLAGS_k_p_com_z;
+  K_d_com(2, 2) = FLAGS_k_d_com_z;
+  W_pelvis_balance(0, 0) = FLAGS_w_pelvis_balance_x;
+  W_pelvis_balance(1, 1) = FLAGS_w_pelvis_balance_y;
+  K_p_pelvis_balance(0, 0) = FLAGS_k_p_pelvis_balance_x;
+  K_p_pelvis_balance(1, 1) = FLAGS_k_p_pelvis_balance_y;
+  K_d_pelvis_balance(0, 0) = FLAGS_k_d_pelvis_balance_x;
+  K_d_pelvis_balance(1, 1) = FLAGS_k_d_pelvis_balance_y;
+  W_pelvis_heading(2, 2) = FLAGS_w_pelvis_heading_z;
+  K_p_pelvis_heading(2, 2) = FLAGS_k_p_pelvis_heading_z;
+  K_d_pelvis_heading(2, 2) = FLAGS_k_d_pelvis_heading_z;
+  W_swing_foot(0, 0) = FLAGS_w_swing_foot_x;
+  W_swing_foot(1, 1) = FLAGS_w_swing_foot_y;
+  W_swing_foot(2, 2) = FLAGS_w_swing_foot_z;
+  K_p_swing_foot(0, 0) = FLAGS_k_p_swing_foot_x;
+  K_p_swing_foot(1, 1) = FLAGS_k_p_swing_foot_y;
+  K_p_swing_foot(2, 2) = FLAGS_k_p_swing_foot_z;
+  K_d_swing_foot(0, 0) = FLAGS_k_d_swing_foot_x;
+  K_d_swing_foot(1, 1) = FLAGS_k_d_swing_foot_y;
+  K_d_swing_foot(2, 2) = FLAGS_k_d_swing_foot_z;
 
   /*std::cout << "w accel: " << gains.w_accel << std::endl;
   std::cout << "w soft constraint: " << gains.w_soft_constraint << std::endl;
@@ -775,7 +778,8 @@ int DoMain(int argc, char* argv[]) {
     // Create osc debug sender.
     auto osc_debug_pub =
         builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_osc_output>(
-            "OSC_DEBUG_WALKING" + suffix, &lcm_local, 1.0 / FLAGS_publish_rate));
+            "OSC_DEBUG_WALKING" + suffix, &lcm_local,
+            1.0 / FLAGS_publish_rate));
     builder.Connect(osc->get_osc_debug_port(), osc_debug_pub->get_input_port());
   }
 
@@ -827,11 +831,11 @@ int DoMain(int argc, char* argv[]) {
   simulator.set_publish_every_time_step(false);
   simulator.set_publish_at_initialization(false);
   simulator.set_target_realtime_rate(FLAGS_target_realtime_rate);
-//  cout << "initialize\n";
+  //  cout << "initialize\n";
   simulator.Initialize();
-//  cout << "advanceto\n";
+  //  cout << "advanceto\n";
   simulator.AdvanceTo(FLAGS_end_time);
-//  cout << "finished simulating\n";
+  //  cout << "finished simulating\n";
 
   return 0;
 }

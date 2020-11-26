@@ -47,10 +47,10 @@ class lcmt_osc_tracking_data_t:
     self.yddot_command_sol = np.array(self.yddot_command_sol)
 
 
-def process_log(log, pos_map, vel_map, act_map, controller_channel, sample_idx=-1):
-  suffix = ""
-  if sample_idx >= 0:
-    suffix = str(sample_idx)
+def process_log(log, pos_map, vel_map, act_map, controller_channel, sample_id=""):
+  suffix = sample_id
+  # if sample_id >= 0:
+  #   suffix = str(sample_id)
 
   t_x = []
   t_u = []

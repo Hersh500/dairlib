@@ -5,7 +5,9 @@ import numpy as np
 import lcm
 import sys
 import yaml
+from random import randrange
 import pdb
+import os
 from shutil import copyfile
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -39,10 +41,12 @@ import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 # TODO: Can probably add noise and add delay to the simulation
 
 def obj_func(x):
-  global sample_idx
-  # sample_idx_in_this_iteration = sample_idx % popsize
-  sample_idx_in_this_iteration = 0
-  sample_idx = sample_idx + 1
+  global sample_index
+  # sample_id = sample_index % popsize
+  sample_index = sample_index + 1
+  sample_id = ""
+  for i in range(10):
+    sample_id += str(randrange(10))
 
   # initialize gain
   cost = 0
@@ -82,19 +86,17 @@ def obj_func(x):
   # Penalize negative weights
   for i in range(param_dim):
     if gains[i] < 0:
-      cost += 500
+      cost += 499
 
-  if cost != 0:
-    print("nagative parameters")
-  else:
-    log_path = dir + 'testlog' + str(sample_idx_in_this_iteration)
+  if cost == 0:
+    log_path = dir + 'testlog' + str(sample_id)
     logger_cmd = ['lcm-logger',
                   '-f',
                   '--quiet',
                   '%s' % log_path,
                   ]
     simulation_cmd = ['bazel-bin/examples/Cassie/run_sim_and_walking',
-                      '--sample_idx=%d' % sample_idx_in_this_iteration,
+                      '--sample_id=%s' % sample_id,
                       '--end_time=5',
                       '--publish_rate=100',
                       '--target_realtime_rate=10',
@@ -137,10 +139,11 @@ def obj_func(x):
 
     # Compute cost
     log = lcm.EventLog(log_path, "r")
+    os.remove(log_path)
     x, u_meas, t_x, u, t_u, contact_info, contact_info_locs, t_contact_info, \
     osc_debug, fsm, estop_signal, switch_signal, t_controller_switch, t_pd, kp, kd, cassie_out, u_pd, t_u_pd, \
     osc_output, full_log = process_lcm_log.process_log(log, pos_map, vel_map,
-      act_map, "___", sample_idx_in_this_iteration)
+      act_map, "___", sample_id)
 
     # tracking cost
     # TODO: need to fix the bug in error_y quaternioin (pelvis_balance_traj and pelvis_heading_traj)
@@ -171,7 +174,7 @@ def obj_func(x):
       # TODO: check if lcm-logger could miss data when data rate is high
       cost = 1000
 
-  print("sample #" + str(sample_idx) + ", cost = " + str(cost))
+  print("sample #" + str(sample_index) + ", cost = " + str(cost))
   return cost
 
 
@@ -216,16 +219,16 @@ def main():
   # Construct CMA
   sigma_init = 0.5
   es = cma.CMAEvolutionStrategy(x_init, sigma_init, {'popsize': popsize})
-  global sample_idx
-  sample_idx = 0
+  global sample_index
+  sample_index = 0
 
   # Save the initial log
-  obj_func(x_init)
-  copyfile(dir + 'testlog0', dir + 'first_iter')
-  sample_idx = 0
+  # obj_func(x_init)
+  # copyfile(dir + 'testlog0', dir + 'first_iter')
+  # sample_index = 0
 
   # Optimize
-  es.optimize(obj_func, n_jobs=1)
+  es.optimize(obj_func, n_jobs=6)
   es.result_pretty()
 
   print(es.popsize)
