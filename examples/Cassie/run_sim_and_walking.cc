@@ -151,6 +151,7 @@ DEFINE_double(k_d_swing_foot_y, 10, "");
 DEFINE_double(k_d_swing_foot_z, 10, "");
 
 DEFINE_string(sample_id, "", "");
+DEFINE_bool(print_gains, false, "");
 
 struct OSCWalkingGains {
   int rows;
@@ -404,26 +405,27 @@ int DoMain(int argc, char* argv[]) {
   K_d_swing_foot(1, 1) = FLAGS_k_d_swing_foot_y;
   K_d_swing_foot(2, 2) = FLAGS_k_d_swing_foot_z;
 
-  /*std::cout << "w accel: " << gains.w_accel << std::endl;
-  std::cout << "w soft constraint: " << gains.w_soft_constraint << std::endl;
-  std::cout << "w_swing_toe: " << gains.w_swing_toe << std::endl;
-  std::cout << "swing_toe_kp: " << gains.swing_toe_kp << std::endl;
-  std::cout << "swing_toe_kd: " << gains.swing_toe_kd << std::endl;
-  std::cout << "w_hip_yaw: " << gains.w_hip_yaw << std::endl;
-  std::cout << "hip_yaw_kp: " << gains.hip_yaw_kp << std::endl;
-  std::cout << "hip_yaw_kd: " << gains.hip_yaw_kd << std::endl;
-  std::cout << "COM W: \n" << W_com << std::endl;
-  std::cout << "COM Kp: \n" << K_p_com << std::endl;
-  std::cout << "COM Kd: \n" << K_d_com << std::endl;
-  std::cout << "Pelvis Heading W: \n" << W_pelvis_heading << std::endl;
-  std::cout << "Pelvis Heading Kp: \n" << K_p_pelvis_heading << std::endl;
-  std::cout << "Pelvis Heading Kd: \n" << K_d_pelvis_heading << std::endl;
-  std::cout << "Pelvis Balance W: \n" << W_pelvis_balance << std::endl;
-  std::cout << "Pelvis Balance Kp: \n" << K_p_pelvis_balance << std::endl;
-  std::cout << "Pelvis Balance Kd: \n" << K_d_pelvis_balance << std::endl;
-  std::cout << "Swing Foot W: \n" << W_swing_foot << std::endl;
-  std::cout << "Swing Foot Kp: \n" << K_p_swing_foot << std::endl;
-  std::cout << "Swing Foot Kd: \n" << K_d_swing_foot << std::endl;*/
+  if (FLAGS_print_gains) {
+    std::cout << "w accel: " << gains.w_accel << std::endl;
+    std::cout << "w soft constraint: " << gains.w_soft_constraint << std::endl;
+    std::cout << "w_swing_toe: " << gains.w_swing_toe << std::endl;
+    std::cout << "swing_toe_kp: " << gains.swing_toe_kp << std::endl;
+    std::cout << "swing_toe_kd: " << gains.swing_toe_kd << std::endl;
+    std::cout << "w_hip_yaw: " << gains.w_hip_yaw << std::endl;
+    std::cout << "hip_yaw_kp: " << gains.hip_yaw_kp << std::endl;
+    std::cout << "hip_yaw_kd: " << gains.hip_yaw_kd << std::endl;
+    std::cout << "COM W: \n" << W_com << std::endl;
+    std::cout << "COM Kp: \n" << K_p_com << std::endl;
+    std::cout << "COM Kd: \n" << K_d_com << std::endl;
+    std::cout << "Pelvis Heading W: \n" << W_pelvis_heading << std::endl;
+    std::cout << "Pelvis Heading Kp: \n" << K_p_pelvis_heading << std::endl;
+    std::cout << "Pelvis Heading Kd: \n" << K_d_pelvis_heading << std::endl;
+    std::cout << "Pelvis Balance W: \n" << W_pelvis_balance << std::endl;
+    std::cout << "Pelvis Balance Kp: \n" << K_p_pelvis_balance << std::endl;
+    std::cout << "Pelvis Balance Kd: \n" << K_d_pelvis_balance << std::endl;
+    std::cout << "Swing Foot W: \n" << W_swing_foot << std::endl;
+    std::cout << "Swing Foot Kp: \n" << K_p_swing_foot << std::endl;
+    std::cout << "Swing Foot Kd: \n" << K_d_swing_foot << std::endl;}
 
   // Get contact frames and position (doesn't matter whether we use
   // plant_w_spr or plant_wospr because the contact frames exit in both

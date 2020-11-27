@@ -1,6 +1,7 @@
 import cma  # https://github.com/CMA-ES/pycma
 import subprocess
 import time
+import math
 import numpy as np
 import lcm
 import sys
@@ -27,6 +28,7 @@ from pydairlib.multibody.kinematic import DistanceEvaluator
 from pydairlib.cassie.cassie_utils import *
 import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 
+
 # TODO: check each term of the cost and potentially save them
 # TODO: avoid negative gains (can we add constraints? otherwise add it to cost)
 # TODO: run one lcm-logger per channel name
@@ -38,6 +40,8 @@ import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 # TODO: Can probably add noise and add delay to the simulation
 
 # TODO: check if lcm-logger could miss data when data rate is high and when doing multithreading
+
+# TODO: can try effort dot to cost
 
 def obj_func(x):
   sample_id = ""
@@ -97,6 +101,7 @@ def obj_func(x):
                       '--end_time=5',
                       '--publish_rate=100',
                       '--target_realtime_rate=10',
+                      '--print_gains=' + str(save_log).lower(),
                       '--w_accel=%.8f' % gains[0],
                       '--w_soft_constraint=%.2f' % gains[1],
                       '--w_swing_toe=%.2f' % gains[2],
@@ -144,27 +149,70 @@ def obj_func(x):
     # tracking cost
     # TODO: need to fix the bug in error_y quaternioin (pelvis_balance_traj and pelvis_heading_traj)
     try:
+      w_vel = 0  # 1/400
       err = osc_debug['swing_ft_traj'].error_y
-      cost += 5 * np.sum(np.multiply(err, err))
+      swing_ft_error_y_cost = 5 * np.sum(np.multiply(err, err))
+      cost += swing_ft_error_y_cost
       err = osc_debug['swing_ft_traj'].error_ydot
-      cost += 5 * 1 / 400 * np.sum(np.multiply(err, err))
+      swing_ft_error_ydot_cost = 5 * w_vel * np.sum(np.multiply(err, err))
+      cost += swing_ft_error_ydot_cost
       err = osc_debug['lipm_traj'].error_y
-      cost += np.sum(np.multiply(err[:, 2], err[:, 2]))
+      lipm_error_y_cost = np.sum(np.multiply(err[:, 2], err[:, 2]))
+      cost += lipm_error_y_cost
       err = osc_debug['pelvis_balance_traj'].error_y
-      cost += np.sum(np.multiply(err[:, :3], err[:, :3]))
+      pelvis_balance_error_y_cost = np.sum(np.multiply(err[:, :3], err[:, :3]))
+      cost += pelvis_balance_error_y_cost
       err = osc_debug['swing_toe_traj'].error_y
-      cost += np.sum(np.multiply(err, err))
+      swing_toe_error_y_cost = np.sum(np.multiply(err, err))
+      cost += swing_toe_error_y_cost
       err = osc_debug['swing_toe_traj'].error_ydot
-      cost += 1 / 400 * np.sum(np.multiply(err, err))
+      swing_toe_error_ydot_cost = w_vel * np.sum(np.multiply(err, err))
+      cost += swing_toe_error_ydot_cost
       err = osc_debug['swing_hip_yaw_traj'].error_y
-      cost += np.sum(np.multiply(err, err))
+      swing_hip_yaw_error_y_cost = np.sum(np.multiply(err, err))
+      cost += swing_hip_yaw_error_y_cost
       err = osc_debug['swing_hip_yaw_traj'].error_ydot
-      cost += 1 / 400 * np.sum(np.multiply(err, err))
-      err = osc_debug['pelvis_heading_traj'].error_y
-      cost += np.sum(np.multiply(err[:, :3], err[:, :3]))
+      swing_hip_yaw_error_ydot_cost = w_vel * np.sum(np.multiply(err, err))
+      cost += swing_hip_yaw_error_ydot_cost
+      err = osc_debug['pelvis_heading_traj'].error_ydot
+      pelvis_heading_error_ydot_cost = np.sum(np.multiply(err[:, 2], err[:, 2]))
+      cost += pelvis_heading_error_ydot_cost
 
       # effort cost
-      cost += np.sum(np.multiply(u / 1000, u / 1000))
+      effort_cost = np.sum(np.multiply(u / 5000, u / 5000))
+      cost += effort_cost
+
+      # spring acceleration cost
+      spring_cost = 0.0
+      t_diff = np.diff(t_x)
+      for name in spring_joint_names:
+        vel_diff = np.diff(x[:, nq + vel_map[name]])
+        vel_dot = vel_diff / t_diff
+        spring_cost += np.sum(np.multiply(vel_dot / 2000, vel_dot / 2000))
+      cost += spring_cost
+
+      # d gain < 10 cost
+      d_gain_cost = 0.0
+      # doesn't include toe joint
+      for idx in [7, 10, 15, 16, 19, 26, 27, 28]:
+        d_gain_cost += math.exp(max(0, gains[idx] - 10)) - 1
+      cost += d_gain_cost
+
+      if save_log:
+        print("Cost breakdown: ")
+        print("swing_ft_error_y: " + str(swing_ft_error_y_cost))
+        print("swing_ft_error_ydot: " + str(swing_ft_error_ydot_cost))
+        print("lipm_error_y: " + str(lipm_error_y_cost))
+        print("pelvis_balance_error_y: " + str(pelvis_balance_error_y_cost))
+        print("swing_toe_error_y: " + str(swing_toe_error_y_cost))
+        print("swing_toe_error_ydot: " + str(swing_toe_error_ydot_cost))
+        print("swing_hip_yaw_error_y: " + str(swing_hip_yaw_error_y_cost))
+        print("swing_hip_yaw_error_ydot: " + str(swing_hip_yaw_error_ydot_cost))
+        print(
+          "pelvis_heading_error_ydot: " + str(pelvis_heading_error_ydot_cost))
+        print("effort: " + str(effort_cost))
+        print("spring_cost: " + str(spring_cost))
+        print("d_gain_cost: " + str(d_gain_cost))
     except:
       # There could be missing trajs when simulation terminates early
       cost = 1000
@@ -183,7 +231,7 @@ def main():
   global domain_randomization, dir
   domain_randomization = False
   dir = "../dairlib_data/cassie_cma/"
-  n_theads = 6
+  n_theads = 12
 
   # Parameters
   global param_dim, popsize
@@ -206,6 +254,14 @@ def main():
   pos_map = pydairlib.multibody.makeNameToPositionsMap(plant)
   vel_map = pydairlib.multibody.makeNameToVelocitiesMap(plant)
   act_map = pydairlib.multibody.makeNameToActuatorsMap(plant)
+
+  # Some setups
+  global spring_joint_names, nq
+  spring_joint_names = ["knee_joint_leftdot",
+                        "knee_joint_rightdot",
+                        "ankle_spring_joint_leftdot",
+                        "ankle_spring_joint_rightdot"]
+  nq = plant.num_positions()
 
   # Read in gains from yaml
   global yaml_gains
