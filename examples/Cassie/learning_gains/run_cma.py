@@ -86,7 +86,7 @@ def obj_func(x):
 
   # Penalize negative weights
   for i in range(param_dim):
-    cost += math.exp(max(0, -gains[i])) - 1
+    cost += 100 * (math.exp(max(0, -x[i])) - 1)
     if gains[i] < 0:
       cost += 499
 
