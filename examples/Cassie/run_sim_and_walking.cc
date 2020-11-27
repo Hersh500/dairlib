@@ -36,6 +36,7 @@
 #include "drake/systems/lcm/lcm_publisher_system.h"
 #include "drake/systems/lcm/lcm_subscriber_system.h"
 #include "drake/systems/primitives/zero_order_hold.h"
+#include "drake/systems/primitives/discrete_time_delay.h"
 
 namespace dairlib {
 
@@ -310,8 +311,21 @@ int DoMain(int argc, char* argv[]) {
           kPeriod, plant.num_actuators());
   builder.Connect(passthrough->get_output_port(),
                   input_zero_order_hold->get_input_port());
-  builder.Connect(input_zero_order_hold->get_output_port(),
-                  plant.get_actuation_input_port());
+  bool is_time_delay = true;
+  double time_delay = 0.014;
+  if (is_time_delay) {
+    auto time_delay_block =
+        builder.AddSystem<drake::systems::DiscreteTimeDelay<double>>(
+            kPeriod, int(time_delay / kPeriod), plant.num_actuators());
+    builder.Connect(input_zero_order_hold->get_output_port(),
+                    time_delay_block->get_input_port());
+    builder.Connect(time_delay_block->get_output_port(),
+                    plant.get_actuation_input_port());
+
+  } else {
+    builder.Connect(input_zero_order_hold->get_output_port(),
+                    plant.get_actuation_input_port());
+  }
 
   ////// Controller //////
 
