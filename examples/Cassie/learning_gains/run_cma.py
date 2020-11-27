@@ -86,6 +86,7 @@ def obj_func(x):
 
   # Penalize negative weights
   for i in range(param_dim):
+    cost += math.exp(max(0, -gains[i])) - 1
     if gains[i] < 0:
       cost += 499
 
@@ -96,44 +97,48 @@ def obj_func(x):
                   '--quiet',
                   '%s' % log_path,
                   ]
-    simulation_cmd = ['bazel-bin/examples/Cassie/run_sim_and_walking',
-                      '--sample_id=%s' % sample_id,
-                      '--end_time=5',
-                      '--publish_rate=100',
-                      '--target_realtime_rate=10',
-                      '--print_gains=' + str(save_log).lower(),
-                      '--w_accel=%.8f' % gains[0],
-                      '--w_soft_constraint=%.2f' % gains[1],
-                      '--w_swing_toe=%.2f' % gains[2],
-                      '--swing_toe_kp=%.2f' % gains[3],
-                      '--swing_toe_kd=%.2f' % gains[4],
-                      '--w_hip_yaw=%.2f' % gains[5],
-                      '--hip_yaw_kp=%.2f' % gains[6],
-                      '--hip_yaw_kd=%.2f' % gains[7],
-                      '--w_com_z=%.2f' % gains[8],
-                      '--k_p_com_z=%.2f' % gains[9],
-                      '--k_d_com_z=%.2f' % gains[10],
-                      '--w_pelvis_balance_x=%.2f' % gains[11],
-                      '--w_pelvis_balance_y=%.2f' % gains[12],
-                      '--k_p_pelvis_balance_x=%.2f' % gains[13],
-                      '--k_p_pelvis_balance_y=%.2f' % gains[14],
-                      '--k_d_pelvis_balance_x=%.2f' % gains[15],
-                      '--k_d_pelvis_balance_y=%.2f' % gains[16],
-                      '--w_pelvis_heading_z=%.2f' % gains[17],
-                      '--k_p_pelvis_heading_z=%.2f' % gains[18],
-                      '--k_d_pelvis_heading_z=%.2f' % gains[19],
-                      '--w_swing_foot_x=%.2f' % gains[20],
-                      '--w_swing_foot_y=%.2f' % gains[21],
-                      '--w_swing_foot_z=%.2f' % gains[22],
-                      '--k_p_swing_foot_x=%.2f' % gains[23],
-                      '--k_p_swing_foot_y=%.2f' % gains[24],
-                      '--k_p_swing_foot_z=%.2f' % gains[25],
-                      '--k_d_swing_foot_x=%.2f' % gains[26],
-                      '--k_d_swing_foot_y=%.2f' % gains[27],
-                      '--k_d_swing_foot_z=%.2f' % gains[28],
-                      ]
+    simulation_cmd = \
+      ['bazel-bin/examples/Cassie/run_sim_and_walking',
+       '--sample_id=%s' % sample_id,
+       '--end_time=5',
+       '--publish_rate=100',
+       '--target_realtime_rate=10',
+       '--print_gains=' + str(save_log).lower(),
+       '--w_accel=%.8f' % gains[0],
+       '--w_soft_constraint=%.2f' % gains[1],
+       '--w_swing_toe=%.2f' % gains[2],
+       '--swing_toe_kp=%.2f' % gains[3],
+       '--swing_toe_kd=%.2f' % gains[4],
+       '--w_hip_yaw=%.2f' % gains[5],
+       '--hip_yaw_kp=%.2f' % gains[6],
+       '--hip_yaw_kd=%.2f' % gains[7],
+       '--w_com_z=%.2f' % gains[8],
+       '--k_p_com_z=%.2f' % gains[9],
+       '--k_d_com_z=%.2f' % gains[10],
+       '--w_pelvis_balance_x=%.2f' % gains[11],
+       '--w_pelvis_balance_y=%.2f' % gains[12],
+       '--k_p_pelvis_balance_x=%.2f' % gains[13],
+       '--k_p_pelvis_balance_y=%.2f' % gains[14],
+       '--k_d_pelvis_balance_x=%.2f' % gains[15],
+       '--k_d_pelvis_balance_y=%.2f' % gains[16],
+       '--w_pelvis_heading_z=%.2f' % gains[17],
+       '--k_p_pelvis_heading_z=%.2f' % gains[18],
+       '--k_d_pelvis_heading_z=%.2f' % gains[19],
+       '--w_swing_foot_x=%.2f' % gains[20],
+       '--w_swing_foot_y=%.2f' % gains[21],
+       '--w_swing_foot_z=%.2f' % gains[22],
+       '--k_p_swing_foot_x=%.2f' % gains[23],
+       '--k_p_swing_foot_y=%.2f' % gains[24],
+       '--k_p_swing_foot_z=%.2f' % gains[25],
+       '--k_d_swing_foot_x=%.2f' % gains[26],
+       '--k_d_swing_foot_y=%.2f' % gains[27],
+       '--k_d_swing_foot_z=%.2f' % gains[28],
+       (' | tee -a ' + dir + 'gains' if save_log else ''),
+       ]
+    if save_log:
+      simulation_cmd = ' '.join(simulation_cmd)
     logger_process = subprocess.Popen(logger_cmd)
-    simulation_process = subprocess.Popen(simulation_cmd)
+    simulation_process = subprocess.Popen(simulation_cmd, shell=save_log)
 
     while simulation_process.poll() is None:  # while subprocess is alive
       time.sleep(1)
@@ -175,7 +180,8 @@ def obj_func(x):
       swing_hip_yaw_error_ydot_cost = w_vel * np.sum(np.multiply(err, err))
       cost += swing_hip_yaw_error_ydot_cost
       err = osc_debug['pelvis_heading_traj'].error_ydot
-      pelvis_heading_error_ydot_cost = np.sum(np.multiply(err[:, 2], err[:, 2]))
+      pelvis_heading_error_ydot_cost = w_vel * np.sum(
+        np.multiply(err[:, 2], err[:, 2]))
       cost += pelvis_heading_error_ydot_cost
 
       # effort cost

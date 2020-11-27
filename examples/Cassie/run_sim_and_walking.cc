@@ -1,4 +1,4 @@
-
+#include <chrono>
 #include <memory>
 #include <gflags/gflags.h>
 
@@ -182,9 +182,6 @@ struct OSCWalkingGains {
   double final_foot_height;
   double final_foot_velocity_z;
   double lipm_height;
-  double SwingFootW_scale;
-  double SwingFootKp_scale;
-  double SwingFootKd_scale;
 
   template <typename Archive>
   void Serialize(Archive* a) {
@@ -218,10 +215,6 @@ struct OSCWalkingGains {
     a->Visit(DRAKE_NVP(final_foot_velocity_z));
     // lipm heursitics
     a->Visit(DRAKE_NVP(lipm_height));
-    // Scales
-    a->Visit(DRAKE_NVP(SwingFootW_scale));
-    a->Visit(DRAKE_NVP(SwingFootKp_scale));
-    a->Visit(DRAKE_NVP(SwingFootKd_scale));
   }
 };
 
@@ -406,6 +399,9 @@ int DoMain(int argc, char* argv[]) {
   K_d_swing_foot(2, 2) = FLAGS_k_d_swing_foot_z;
 
   if (FLAGS_print_gains) {
+    auto clock_now = std::chrono::system_clock::now();
+    std::time_t current_time = std::chrono::system_clock::to_time_t(clock_now);
+    cout << "\nCurrent time: " << std::ctime(&current_time);
     std::cout << "w accel: " << gains.w_accel << std::endl;
     std::cout << "w soft constraint: " << gains.w_soft_constraint << std::endl;
     std::cout << "w_swing_toe: " << gains.w_swing_toe << std::endl;
@@ -425,7 +421,9 @@ int DoMain(int argc, char* argv[]) {
     std::cout << "Pelvis Balance Kd: \n" << K_d_pelvis_balance << std::endl;
     std::cout << "Swing Foot W: \n" << W_swing_foot << std::endl;
     std::cout << "Swing Foot Kp: \n" << K_p_swing_foot << std::endl;
-    std::cout << "Swing Foot Kd: \n" << K_d_swing_foot << std::endl;}
+    std::cout << "Swing Foot Kd: \n" << K_d_swing_foot << std::endl;
+    std::cout << "\n";
+  }
 
   // Get contact frames and position (doesn't matter whether we use
   // plant_w_spr or plant_wospr because the contact frames exit in both
