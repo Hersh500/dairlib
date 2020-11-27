@@ -290,17 +290,17 @@ def main():
   save_log = False
 
   # Optimize
-  # es.optimize(obj_func, n_jobs=n_theads)
-  # es.result_pretty()
-  #
-  # # Save the log of the best solution
-  # save_log = True
-  # obj_func(es.result.xbest.tolist())
-  # save_log = False
-  #
-  # print(es.popsize)
-  # print(es.opts)
-  # pdb.set_trace()
+  es.optimize(obj_func, n_jobs=n_theads)
+  es.result_pretty()
+
+  # Save the log of the best solution
+  save_log = True
+  obj_func(es.result.xbest.tolist())
+  save_log = False
+
+  print(es.popsize)
+  print(es.opts)
+  pdb.set_trace()
 
 
 if __name__ == "__main__":
