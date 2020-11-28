@@ -92,7 +92,7 @@ def obj_func(x):
       cost += 499
 
   if cost == 0:
-    n_trail_for_random_spring = (1 if save_log else 3)
+    n_trail_for_random_spring = (1 if save_log else 9)
     for i in range(n_trail_for_random_spring):
       cost = run_sim_and_eval_cost(cost, gains, sample_id)
     cost /= n_trail_for_random_spring
@@ -105,6 +105,10 @@ def run_sim_and_eval_cost(cost, gains, sample_id):
   # Randomize spring stiffness
   spring_stiffness = (default_spring_stiffness if save_log
                       else [random.uniform(800, 2200) for i in range(4)])
+
+  # Randomize initial pelvis disturbance
+  pelvis_disturbance = ([0, 0, 0] if save_log
+                        else [random.uniform(-1, 1) for i in range(3)])
 
   # Run the simulation and lcm-logger
   log_path = dir + 'testlog' + str(sample_id)
@@ -124,6 +128,9 @@ def run_sim_and_eval_cost(cost, gains, sample_id):
      '--knee_spring_right=%.2f' % spring_stiffness[1],
      '--ankle_spring_left=%.2f' % spring_stiffness[2],
      '--ankle_spring_right=%.2f' % spring_stiffness[3],
+     '--pelvis_disturbnace_xdot=%.2f' % pelvis_disturbance[0],
+     '--pelvis_disturbnace_ydot=%.2f' % pelvis_disturbance[1],
+     '--pelvis_disturbnace_zdot=%.2f' % pelvis_disturbance[2],
      '--w_accel=%.8f' % gains[0],
      '--w_soft_constraint=%.2f' % gains[1],
      '--w_swing_toe=%.2f' % gains[2],
@@ -334,7 +341,7 @@ def main():
   # Save the initial log
   global save_log
   save_log = True
-  # obj_func(x_init)
+  obj_func(x_init)
   save_log = False
 
   # Optimize

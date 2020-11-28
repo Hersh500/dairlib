@@ -154,6 +154,10 @@ DEFINE_double(knee_spring_right, 1500, "");
 DEFINE_double(ankle_spring_left, 1250, "");
 DEFINE_double(ankle_spring_right, 1250, "");
 
+DEFINE_double(pelvis_disturbnace_xdot, 0, "in m/s");
+DEFINE_double(pelvis_disturbnace_ydot, 0, "in m/s");
+DEFINE_double(pelvis_disturbnace_zdot, 0, "in m/s");
+
 DEFINE_string(sample_id, "", "");
 DEFINE_bool(print_gains, false, "");
 
@@ -828,9 +832,12 @@ int DoMain(int argc, char* argv[]) {
   CassieFixedPointSolver(plant_for_solver, FLAGS_init_height, mu_fp,
                          min_normal_fp, true, toe_spread, &q_init, &u_init,
                          &lambda_init);
+  VectorXd v_init = VectorXd::Zero(plant_sim.num_velocities());
+  v_init(3) = FLAGS_pelvis_disturbnace_xdot;
+  v_init(4) = FLAGS_pelvis_disturbnace_ydot;
+  v_init(5) = FLAGS_pelvis_disturbnace_zdot;
   plant_sim.SetPositions(&plant_context, q_init);
-  plant_sim.SetVelocities(&plant_context,
-                          VectorXd::Zero(plant_sim.num_velocities()));
+  plant_sim.SetVelocities(&plant_context, v_init);
 
   Simulator<double> simulator(*diagram, std::move(diagram_context));
 
