@@ -35,8 +35,8 @@
 #include "drake/systems/lcm/lcm_interface_system.h"
 #include "drake/systems/lcm/lcm_publisher_system.h"
 #include "drake/systems/lcm/lcm_subscriber_system.h"
-#include "drake/systems/primitives/zero_order_hold.h"
 #include "drake/systems/primitives/discrete_time_delay.h"
+#include "drake/systems/primitives/zero_order_hold.h"
 
 namespace dairlib {
 
@@ -99,8 +99,6 @@ DEFINE_int32(
     "1 uses the neutral point derived from LIPM given the stance duration");
 
 // Simulation parameters.
-DEFINE_bool(floating_base, true, "Fixed or floating base model");
-
 DEFINE_double(target_realtime_rate, 1.0,
               "Desired rate relative to real time.  See documentation for "
               "Simulator::set_target_realtime_rate() for details.");
@@ -150,6 +148,11 @@ DEFINE_double(k_p_swing_foot_z, 400, "");
 DEFINE_double(k_d_swing_foot_x, 10, "");
 DEFINE_double(k_d_swing_foot_y, 10, "");
 DEFINE_double(k_d_swing_foot_z, 10, "");
+
+DEFINE_double(knee_spring_left, 1500, "");
+DEFINE_double(knee_spring_right, 1500, "");
+DEFINE_double(ankle_spring_left, 1250, "");
+DEFINE_double(ankle_spring_right, 1250, "");
 
 DEFINE_string(sample_id, "", "");
 DEFINE_bool(print_gains, false, "");
@@ -241,35 +244,36 @@ int DoMain(int argc, char* argv[]) {
   scene_graph.set_name("scene_graph");
 
   const double time_step = FLAGS_time_stepping ? FLAGS_dt : 0.0;
-  MultibodyPlant<double>& plant = *builder.AddSystem<MultibodyPlant>(time_step);
-  if (FLAGS_floating_base) {
-    multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
-  }
-  addCassieMultibody(&plant, &scene_graph, FLAGS_floating_base, urdf, true,
-                     true);
-  plant.Finalize();
+  MultibodyPlant<double>& plant_sim =
+      *builder.AddSystem<MultibodyPlant>(time_step);
+  multibody::addFlatTerrain(&plant_sim, &scene_graph, .8, .8);
+  addCassieMultibody(&plant_sim, &scene_graph, true, urdf, true, true,
+                     {FLAGS_knee_spring_left, FLAGS_knee_spring_right,
+                      FLAGS_ankle_spring_left, FLAGS_ankle_spring_right});
+  plant_sim.Finalize();
 
-  plant.set_penetration_allowance(FLAGS_penetration_allowance);
-  plant.set_stiction_tolerance(FLAGS_v_stiction);
+  plant_sim.set_penetration_allowance(FLAGS_penetration_allowance);
+  plant_sim.set_stiction_tolerance(FLAGS_v_stiction);
 
   // Create lcm systems.
   drake::lcm::DrakeLcm lcm_local("udpm://239.255.76.67:7667?ttl=0");
   //  auto input_sub =
   //      builder.AddSystem(LcmSubscriberSystem::Make<dairlib::lcmt_robot_input>(
   //          "CASSIE_INPUT", &lcm_local));
-  auto input_receiver = builder.AddSystem<systems::RobotInputReceiver>(plant);
+  auto input_receiver =
+      builder.AddSystem<systems::RobotInputReceiver>(plant_sim);
   auto passthrough = builder.AddSystem<SubvectorPassThrough>(
       input_receiver->get_output_port(0).size(), 0,
-      plant.get_actuation_input_port().size());
+      plant_sim.get_actuation_input_port().size());
   auto state_pub =
       builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_robot_output>(
           "CASSIE_STATE_SIMULATION" + suffix, &lcm_local,
           1.0 / FLAGS_publish_rate));
-  auto state_sender = builder.AddSystem<systems::RobotOutputSender>(plant);
+  auto state_sender = builder.AddSystem<systems::RobotOutputSender>(plant_sim);
 
   // Contact Information
   ContactResultsToLcmSystem<double>& contact_viz =
-      *builder.template AddSystem<ContactResultsToLcmSystem<double>>(plant);
+      *builder.template AddSystem<ContactResultsToLcmSystem<double>>(plant_sim);
   contact_viz.set_name("contact_visualization");
   //  auto& contact_results_publisher = *builder.AddSystem(
   //      LcmPublisherSystem::Make<drake::lcmt_contact_results_for_viz>(
@@ -279,7 +283,8 @@ int DoMain(int argc, char* argv[]) {
 
   // Sensor aggregator and publisher of lcmt_cassie_out
   //  const auto& sensor_aggregator =
-  //      AddImuAndAggregator(&builder, plant, passthrough->get_output_port());
+  //      AddImuAndAggregator(&builder, plant_sim,
+  //      passthrough->get_output_port());
   //  auto sensor_pub =
   //      builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_cassie_out>(
   //          "CASSIE_OUTPUT" + suffix, &lcm_local, 1.0 / FLAGS_publish_rate));
@@ -287,15 +292,15 @@ int DoMain(int argc, char* argv[]) {
   // Connect leaf systems
   //  builder.Connect(*input_sub, *input_receiver);
   builder.Connect(*input_receiver, *passthrough);
-  builder.Connect(plant.get_state_output_port(),
+  builder.Connect(plant_sim.get_state_output_port(),
                   state_sender->get_input_port_state());
   builder.Connect(*state_sender, *state_pub);
   builder.Connect(
-      plant.get_geometry_poses_output_port(),
-      scene_graph.get_source_pose_port(plant.get_source_id().value()));
+      plant_sim.get_geometry_poses_output_port(),
+      scene_graph.get_source_pose_port(plant_sim.get_source_id().value()));
   builder.Connect(scene_graph.get_query_output_port(),
-                  plant.get_geometry_query_input_port());
-  builder.Connect(plant.get_contact_results_output_port(),
+                  plant_sim.get_geometry_query_input_port());
+  builder.Connect(plant_sim.get_contact_results_output_port(),
                   contact_viz.get_input_port(0));
   //  builder.Connect(contact_viz.get_output_port(0),
   //                  contact_results_publisher.get_input_port());
@@ -304,11 +309,11 @@ int DoMain(int argc, char* argv[]) {
 
   // Zero order hold for the robot input
   //  builder.Connect(passthrough->get_output_port(),
-  //                  plant.get_actuation_input_port());
+  //                  plant_sim.get_actuation_input_port());
   double kPeriod = 0.002;
   auto input_zero_order_hold =
       builder.AddSystem<drake::systems::ZeroOrderHold<double>>(
-          kPeriod, plant.num_actuators());
+          kPeriod, plant_sim.num_actuators());
   builder.Connect(passthrough->get_output_port(),
                   input_zero_order_hold->get_input_port());
   bool is_time_delay = true;
@@ -316,26 +321,26 @@ int DoMain(int argc, char* argv[]) {
   if (is_time_delay) {
     auto time_delay_block =
         builder.AddSystem<drake::systems::DiscreteTimeDelay<double>>(
-            kPeriod, int(time_delay / kPeriod), plant.num_actuators());
+            kPeriod, int(time_delay / kPeriod), plant_sim.num_actuators());
     builder.Connect(input_zero_order_hold->get_output_port(),
                     time_delay_block->get_input_port());
     builder.Connect(time_delay_block->get_output_port(),
-                    plant.get_actuation_input_port());
+                    plant_sim.get_actuation_input_port());
 
   } else {
     builder.Connect(input_zero_order_hold->get_output_port(),
-                    plant.get_actuation_input_port());
+                    plant_sim.get_actuation_input_port());
   }
 
   ////// Controller //////
 
   // Build Cassie MBP
-  drake::multibody::MultibodyPlant<double> plant_w_spr(0.0);
-  addCassieMultibody(&plant_w_spr, nullptr, true /*floating base*/, urdf,
+  drake::multibody::MultibodyPlant<double> plant_ctrl(0.0);
+  addCassieMultibody(&plant_ctrl, nullptr, true /*floating base*/, urdf,
                      true /*spring model*/, false /*loop closure*/);
-  plant_w_spr.Finalize();
+  plant_ctrl.Finalize();
 
-  auto context_w_spr = plant_w_spr.CreateDefaultContext();
+  auto context_w_spr = plant_ctrl.CreateDefaultContext();
 
   // Build the controller diagram
 
@@ -440,27 +445,27 @@ int DoMain(int argc, char* argv[]) {
   }
 
   // Get contact frames and position (doesn't matter whether we use
-  // plant_w_spr or plant_wospr because the contact frames exit in both
+  // plant_ctrl or plant_wospr because the contact frames exit in both
   // plants)
-  auto left_toe = LeftToeFront(plant_w_spr);
-  auto left_heel = LeftToeRear(plant_w_spr);
-  auto right_toe = RightToeFront(plant_w_spr);
-  auto right_heel = RightToeRear(plant_w_spr);
+  auto left_toe = LeftToeFront(plant_ctrl);
+  auto left_heel = LeftToeRear(plant_ctrl);
+  auto right_toe = RightToeFront(plant_ctrl);
+  auto right_heel = RightToeRear(plant_ctrl);
 
   // Get body frames and points
   Vector3d mid_contact_point = (left_toe.first + left_heel.first) / 2;
   auto left_toe_mid = std::pair<const Vector3d, const Frame<double>&>(
-      mid_contact_point, plant_w_spr.GetFrameByName("toe_left"));
+      mid_contact_point, plant_ctrl.GetFrameByName("toe_left"));
   auto right_toe_mid = std::pair<const Vector3d, const Frame<double>&>(
-      mid_contact_point, plant_w_spr.GetFrameByName("toe_right"));
+      mid_contact_point, plant_ctrl.GetFrameByName("toe_right"));
   auto left_toe_origin = std::pair<const Vector3d, const Frame<double>&>(
-      Vector3d::Zero(), plant_w_spr.GetFrameByName("toe_left"));
+      Vector3d::Zero(), plant_ctrl.GetFrameByName("toe_left"));
   auto right_toe_origin = std::pair<const Vector3d, const Frame<double>&>(
-      Vector3d::Zero(), plant_w_spr.GetFrameByName("toe_right"));
+      Vector3d::Zero(), plant_ctrl.GetFrameByName("toe_right"));
 
   // Create state receiver.
   auto state_receiver =
-      builder.AddSystem<systems::RobotOutputReceiver>(plant_w_spr);
+      builder.AddSystem<systems::RobotOutputReceiver>(plant_ctrl);
   builder.Connect(state_sender->get_output_port(0),
                   state_receiver->get_input_port(0));
 
@@ -469,7 +474,7 @@ int DoMain(int argc, char* argv[]) {
       builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_robot_input>(
           FLAGS_channel_u + suffix, &lcm_local, 1.0 / FLAGS_publish_rate));
   auto command_sender =
-      builder.AddSystem<systems::RobotCommandSender>(plant_w_spr);
+      builder.AddSystem<systems::RobotCommandSender>(plant_ctrl);
   builder.Connect(command_sender->get_output_port(0),
                   input_receiver->get_input_port());
   builder.Connect(command_sender->get_output_port(0),
@@ -477,9 +482,9 @@ int DoMain(int argc, char* argv[]) {
 
   // Add emulator for floating base drift
   Eigen::VectorXd drift_mean =
-      Eigen::VectorXd::Zero(plant_w_spr.num_positions());
-  Eigen::MatrixXd drift_cov = Eigen::MatrixXd::Zero(
-      plant_w_spr.num_positions(), plant_w_spr.num_positions());
+      Eigen::VectorXd::Zero(plant_ctrl.num_positions());
+  Eigen::MatrixXd drift_cov = Eigen::MatrixXd::Zero(plant_ctrl.num_positions(),
+                                                    plant_ctrl.num_positions());
   drift_cov(4, 4) = FLAGS_drift_rate;  // x
   drift_cov(5, 5) = FLAGS_drift_rate;  // y
   drift_cov(6, 6) = FLAGS_drift_rate;  // z
@@ -487,7 +492,7 @@ int DoMain(int argc, char* argv[]) {
   // changing SimulatorDrift.
 
   auto simulator_drift =
-      builder.AddSystem<SimulatorDrift>(plant_w_spr, drift_mean, drift_cov);
+      builder.AddSystem<SimulatorDrift>(plant_ctrl, drift_mean, drift_cov);
   builder.Connect(state_receiver->get_output_port(0),
                   simulator_drift->get_input_port_state());
 
@@ -506,13 +511,13 @@ int DoMain(int argc, char* argv[]) {
     //    double vel_scale_rot = 0.5;
     //    double vel_scale_trans = 1.5;
     //    high_level_command = builder.AddSystem<cassie::osc::HighLevelCommand>(
-    //        plant_w_spr, context_w_spr.get(), vel_scale_rot, vel_scale_trans,
+    //        plant_ctrl, context_w_spr.get(), vel_scale_rot, vel_scale_trans,
     //        FLAGS_footstep_option);
     //    builder.Connect(cassie_out_receiver->get_output_port(),
     //                    high_level_command->get_cassie_output_port());
   } else {
     high_level_command = builder.AddSystem<cassie::osc::HighLevelCommand>(
-        plant_w_spr, context_w_spr.get(), global_target_position,
+        plant_ctrl, context_w_spr.get(), global_target_position,
         params_of_no_turning, FLAGS_footstep_option);
   }
   builder.Connect(state_receiver->get_output_port(0),
@@ -520,7 +525,7 @@ int DoMain(int argc, char* argv[]) {
 
   // Create heading traj generator
   auto head_traj_gen = builder.AddSystem<cassie::osc::HeadingTrajGenerator>(
-      plant_w_spr, context_w_spr.get());
+      plant_ctrl, context_w_spr.get());
   builder.Connect(simulator_drift->get_output_port(0),
                   head_traj_gen->get_state_input_port());
   builder.Connect(high_level_command->get_yaw_output_port(),
@@ -545,7 +550,7 @@ int DoMain(int argc, char* argv[]) {
                        right_support_duration, double_support_duration};
   }
   auto fsm = builder.AddSystem<systems::TimeBasedFiniteStateMachine>(
-      plant_w_spr, fsm_states, state_durations);
+      plant_ctrl, fsm_states, state_durations);
   builder.Connect(simulator_drift->get_output_port(0),
                   fsm->get_input_port_state());
 
@@ -588,9 +593,8 @@ int DoMain(int argc, char* argv[]) {
     contact_points_in_each_state.push_back({left_toe_mid, right_toe_mid});
   }
   auto lipm_traj_generator = builder.AddSystem<systems::LIPMTrajGenerator>(
-      plant_w_spr, context_w_spr.get(), desired_com_height,
-      unordered_fsm_states, unordered_state_durations,
-      contact_points_in_each_state);
+      plant_ctrl, context_w_spr.get(), desired_com_height, unordered_fsm_states,
+      unordered_state_durations, contact_points_in_each_state);
   builder.Connect(fsm->get_output_port(0),
                   lipm_traj_generator->get_input_port_fsm());
   builder.Connect(touchdown_event_time->get_output_port_event_time(),
@@ -602,7 +606,7 @@ int DoMain(int argc, char* argv[]) {
   bool use_predicted_com_vel = true;
   auto walking_speed_control =
       builder.AddSystem<cassie::osc::WalkingSpeedControl>(
-          plant_w_spr, context_w_spr.get(), FLAGS_footstep_option,
+          plant_ctrl, context_w_spr.get(), FLAGS_footstep_option,
           use_predicted_com_vel ? left_support_duration : 0);
   builder.Connect(high_level_command->get_xy_output_port(),
                   walking_speed_control->get_input_port_des_hor_vel());
@@ -633,7 +637,7 @@ int DoMain(int argc, char* argv[]) {
       left_toe_origin, right_toe_origin};
   auto swing_ft_traj_generator =
       builder.AddSystem<systems::SwingFootTrajGenerator>(
-          plant_w_spr, context_w_spr.get(), left_right_support_fsm_states,
+          plant_ctrl, context_w_spr.get(), left_right_support_fsm_states,
           left_right_support_state_durations, left_right_foot, "pelvis",
           gains.mid_foot_height, gains.final_foot_height,
           gains.final_foot_velocity_z, max_CoM_to_footstep_dist,
@@ -652,37 +656,37 @@ int DoMain(int argc, char* argv[]) {
 
   // Create Operational space control
   auto osc = builder.AddSystem<systems::controllers::OperationalSpaceControl>(
-      plant_w_spr, plant_w_spr, context_w_spr.get(), context_w_spr.get(), true,
+      plant_ctrl, plant_ctrl, context_w_spr.get(), context_w_spr.get(), true,
       FLAGS_print_osc /*print_tracking_info*/);
 
   // Cost
-  int n_v = plant_w_spr.num_velocities();
+  int n_v = plant_ctrl.num_velocities();
   MatrixXd Q_accel = gains.w_accel * MatrixXd::Identity(n_v, n_v);
   osc->SetAccelerationCostForAllJoints(Q_accel);
 
   // Constraints in OSC
-  multibody::KinematicEvaluatorSet<double> evaluators(plant_w_spr);
+  multibody::KinematicEvaluatorSet<double> evaluators(plant_ctrl);
   // 1. fourbar constraint
-  auto left_loop = LeftLoopClosureEvaluator(plant_w_spr);
-  auto right_loop = RightLoopClosureEvaluator(plant_w_spr);
+  auto left_loop = LeftLoopClosureEvaluator(plant_ctrl);
+  auto right_loop = RightLoopClosureEvaluator(plant_ctrl);
   evaluators.add_evaluator(&left_loop);
   evaluators.add_evaluator(&right_loop);
   // 2. fixed spring constriant
   // Note that we set the position value to 0, but this is not used in OSC,
   // because OSC constraint only use JdotV and J.
-  auto pos_idx_map = multibody::makeNameToPositionsMap(plant_w_spr);
-  auto vel_idx_map = multibody::makeNameToVelocitiesMap(plant_w_spr);
+  auto pos_idx_map = multibody::makeNameToPositionsMap(plant_ctrl);
+  auto vel_idx_map = multibody::makeNameToVelocitiesMap(plant_ctrl);
   auto left_fixed_knee_spring =
-      FixedJointEvaluator(plant_w_spr, pos_idx_map.at("knee_joint_left"),
+      FixedJointEvaluator(plant_ctrl, pos_idx_map.at("knee_joint_left"),
                           vel_idx_map.at("knee_joint_leftdot"), 0);
   auto right_fixed_knee_spring =
-      FixedJointEvaluator(plant_w_spr, pos_idx_map.at("knee_joint_right"),
+      FixedJointEvaluator(plant_ctrl, pos_idx_map.at("knee_joint_right"),
                           vel_idx_map.at("knee_joint_rightdot"), 0);
-  auto left_fixed_ankle_spring = FixedJointEvaluator(
-      plant_w_spr, pos_idx_map.at("ankle_spring_joint_left"),
-      vel_idx_map.at("ankle_spring_joint_leftdot"), 0);
+  auto left_fixed_ankle_spring =
+      FixedJointEvaluator(plant_ctrl, pos_idx_map.at("ankle_spring_joint_left"),
+                          vel_idx_map.at("ankle_spring_joint_leftdot"), 0);
   auto right_fixed_ankle_spring = FixedJointEvaluator(
-      plant_w_spr, pos_idx_map.at("ankle_spring_joint_right"),
+      plant_ctrl, pos_idx_map.at("ankle_spring_joint_right"),
       vel_idx_map.at("ankle_spring_joint_rightdot"), 0);
   evaluators.add_evaluator(&left_fixed_knee_spring);
   evaluators.add_evaluator(&right_fixed_knee_spring);
@@ -699,16 +703,16 @@ int DoMain(int argc, char* argv[]) {
   osc->SetContactFriction(mu);
   // Add contact points (The position doesn't matter. It's not used in OSC)
   auto left_toe_evaluator = multibody::WorldPointEvaluator(
-      plant_w_spr, left_toe.first, left_toe.second, Matrix3d::Identity(),
+      plant_ctrl, left_toe.first, left_toe.second, Matrix3d::Identity(),
       Vector3d::Zero(), {1, 2});
   auto left_heel_evaluator = multibody::WorldPointEvaluator(
-      plant_w_spr, left_heel.first, left_heel.second, Matrix3d::Identity(),
+      plant_ctrl, left_heel.first, left_heel.second, Matrix3d::Identity(),
       Vector3d::Zero(), {0, 1, 2});
   auto right_toe_evaluator = multibody::WorldPointEvaluator(
-      plant_w_spr, right_toe.first, right_toe.second, Matrix3d::Identity(),
+      plant_ctrl, right_toe.first, right_toe.second, Matrix3d::Identity(),
       Vector3d::Zero(), {1, 2});
   auto right_heel_evaluator = multibody::WorldPointEvaluator(
-      plant_w_spr, right_heel.first, right_heel.second, Matrix3d::Identity(),
+      plant_ctrl, right_heel.first, right_heel.second, Matrix3d::Identity(),
       Vector3d::Zero(), {0, 1, 2});
   osc->AddStateAndContactPoint(left_stance_state, &left_toe_evaluator);
   osc->AddStateAndContactPoint(left_stance_state, &left_heel_evaluator);
@@ -724,21 +728,21 @@ int DoMain(int argc, char* argv[]) {
   // Swing foot tracking
   TransTaskSpaceTrackingData swing_foot_traj("swing_ft_traj", K_p_swing_foot,
                                              K_d_swing_foot, W_swing_foot,
-                                             plant_w_spr, plant_w_spr);
+                                             plant_ctrl, plant_ctrl);
   swing_foot_traj.AddStateAndPointToTrack(left_stance_state, "toe_right");
   swing_foot_traj.AddStateAndPointToTrack(right_stance_state, "toe_left");
   osc->AddTrackingData(&swing_foot_traj);
   // Center of mass tracking
   //  ComTrackingData center_of_mass_traj("lipm_traj", K_p_com, K_d_com, W_com,
-  //                                      plant_w_spr, plant_w_spr);
-  TransTaskSpaceTrackingData center_of_mass_traj(
-      "lipm_traj", K_p_com, K_d_com, W_com, plant_w_spr, plant_w_spr);
+  //                                      plant_ctrl, plant_ctrl);
+  TransTaskSpaceTrackingData center_of_mass_traj("lipm_traj", K_p_com, K_d_com,
+                                                 W_com, plant_ctrl, plant_ctrl);
   center_of_mass_traj.AddPointToTrack("pelvis");
   osc->AddTrackingData(&center_of_mass_traj);
   // Pelvis rotation tracking (pitch and roll)
   RotTaskSpaceTrackingData pelvis_balance_traj(
       "pelvis_balance_traj", K_p_pelvis_balance, K_d_pelvis_balance,
-      W_pelvis_balance, plant_w_spr, plant_w_spr);
+      W_pelvis_balance, plant_ctrl, plant_ctrl);
   pelvis_balance_traj.AddFrameToTrack("pelvis");
   VectorXd pelvis_desired_quat(4);
   pelvis_desired_quat << 1, 0, 0, 0;
@@ -746,7 +750,7 @@ int DoMain(int argc, char* argv[]) {
   // Pelvis rotation tracking (yaw)
   RotTaskSpaceTrackingData pelvis_heading_traj(
       "pelvis_heading_traj", K_p_pelvis_heading, K_d_pelvis_heading,
-      W_pelvis_heading, plant_w_spr, plant_w_spr);
+      W_pelvis_heading, plant_ctrl, plant_ctrl);
   pelvis_heading_traj.AddFrameToTrack("pelvis");
   osc->AddTrackingData(&pelvis_heading_traj, 0.1);  // 0.05
   // Swing toe joint tracking (Currently use fix position)
@@ -756,8 +760,8 @@ int DoMain(int argc, char* argv[]) {
   MatrixXd K_p_swing_toe = gains.swing_toe_kp * MatrixXd::Identity(1, 1);
   MatrixXd K_d_swing_toe = gains.swing_toe_kd * MatrixXd::Identity(1, 1);
   JointSpaceTrackingData swing_toe_traj("swing_toe_traj", K_p_swing_toe,
-                                        K_d_swing_toe, W_swing_toe, plant_w_spr,
-                                        plant_w_spr);
+                                        K_d_swing_toe, W_swing_toe, plant_ctrl,
+                                        plant_ctrl);
   swing_toe_traj.AddStateAndJointToTrack(left_stance_state, "toe_right",
                                          "toe_rightdot");
   swing_toe_traj.AddStateAndJointToTrack(right_stance_state, "toe_left",
@@ -768,8 +772,8 @@ int DoMain(int argc, char* argv[]) {
   MatrixXd K_p_hip_yaw = gains.hip_yaw_kp * MatrixXd::Identity(1, 1);
   MatrixXd K_d_hip_yaw = gains.hip_yaw_kd * MatrixXd::Identity(1, 1);
   JointSpaceTrackingData swing_hip_yaw_traj("swing_hip_yaw_traj", K_p_hip_yaw,
-                                            K_d_hip_yaw, W_hip_yaw, plant_w_spr,
-                                            plant_w_spr);
+                                            K_d_hip_yaw, W_hip_yaw, plant_ctrl,
+                                            plant_ctrl);
   swing_hip_yaw_traj.AddStateAndJointToTrack(left_stance_state, "hip_yaw_right",
                                              "hip_yaw_rightdot");
   swing_hip_yaw_traj.AddStateAndJointToTrack(right_stance_state, "hip_yaw_left",
@@ -806,7 +810,7 @@ int DoMain(int argc, char* argv[]) {
   diagram_context->EnableCaching();
   diagram->SetDefaultContext(diagram_context.get());
   Context<double>& plant_context =
-      diagram->GetMutableSubsystemContext(plant, diagram_context.get());
+      diagram->GetMutableSubsystemContext(plant_sim, diagram_context.get());
 
   // Set initial conditions of the simulation
   VectorXd q_init, u_init, lambda_init;
@@ -815,22 +819,18 @@ int DoMain(int argc, char* argv[]) {
   double toe_spread = .2;
   // Create a plant for CassieFixedPointSolver.
   // Note that we cannot use the plant from the above diagram, because after the
-  // diagram is built, plant.get_actuation_input_port().HasValue(*context)
+  // diagram is built, plant_sim.get_actuation_input_port().HasValue(*context)
   // throws a segfault error
   drake::multibody::MultibodyPlant<double> plant_for_solver(0.0);
-  addCassieMultibody(&plant_for_solver, nullptr,
-                     FLAGS_floating_base /*floating base*/, urdf, true, true);
+  addCassieMultibody(&plant_for_solver, nullptr, true /*floating base*/, urdf,
+                     true, true);
   plant_for_solver.Finalize();
-  if (FLAGS_floating_base) {
-    CassieFixedPointSolver(plant_for_solver, FLAGS_init_height, mu_fp,
-                           min_normal_fp, true, toe_spread, &q_init, &u_init,
-                           &lambda_init);
-  } else {
-    CassieFixedBaseFixedPointSolver(plant_for_solver, &q_init, &u_init,
-                                    &lambda_init);
-  }
-  plant.SetPositions(&plant_context, q_init);
-  plant.SetVelocities(&plant_context, VectorXd::Zero(plant.num_velocities()));
+  CassieFixedPointSolver(plant_for_solver, FLAGS_init_height, mu_fp,
+                         min_normal_fp, true, toe_spread, &q_init, &u_init,
+                         &lambda_init);
+  plant_sim.SetPositions(&plant_context, q_init);
+  plant_sim.SetVelocities(&plant_context,
+                          VectorXd::Zero(plant_sim.num_velocities()));
 
   Simulator<double> simulator(*diagram, std::move(diagram_context));
 

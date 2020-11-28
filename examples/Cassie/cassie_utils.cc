@@ -106,7 +106,8 @@ multibody::DistanceEvaluator<T> RightLoopClosureEvaluator(
 void addCassieMultibody(MultibodyPlant<double>* plant,
                         SceneGraph<double>* scene_graph, bool floating_base,
                         std::string filename, bool add_leaf_springs,
-                        bool add_loop_closure) {
+                        bool add_loop_closure,
+                        std::vector<double> spring_stiffness) {
   std::string full_name = FindResourceOrThrow(filename);
   Parser parser(plant, scene_graph);
   parser.AddModelFromFile(full_name);
@@ -122,19 +123,19 @@ void addCassieMultibody(MultibodyPlant<double>* plant,
     plant->AddForceElement<RevoluteSpring>(
         dynamic_cast<const drake::multibody::RevoluteJoint<double>&>(
             plant->GetJointByName("knee_joint_left")),
-        0, 1500);
+        0, spring_stiffness[0]);
     plant->AddForceElement<RevoluteSpring>(
         dynamic_cast<const drake::multibody::RevoluteJoint<double>&>(
             plant->GetJointByName("knee_joint_right")),
-        0, 1500);
+        0, spring_stiffness[1]);
     plant->AddForceElement<RevoluteSpring>(
         dynamic_cast<const drake::multibody::RevoluteJoint<double>&>(
             plant->GetJointByName("ankle_spring_joint_left")),
-        0, 1250);
+        0, spring_stiffness[2]);
     plant->AddForceElement<RevoluteSpring>(
         dynamic_cast<const drake::multibody::RevoluteJoint<double>&>(
             plant->GetJointByName("ankle_spring_joint_right")),
-        0, 1250);
+        0, spring_stiffness[3]);
   }
 
   if (add_loop_closure) {
