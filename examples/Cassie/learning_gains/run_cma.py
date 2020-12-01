@@ -89,7 +89,7 @@ def obj_func(x):
   for i in range(param_dim):
     cost += 100 * (math.exp(max(0, -x[i])) - 1)
     if gains[i] < 0:
-      cost += 499
+      cost += 50
 
   if cost == 0:
     n_trail_for_random_spring = (1 if save_log else 9)
@@ -102,6 +102,8 @@ def obj_func(x):
 
 
 def run_sim_and_eval_cost(cost, gains, sample_id):
+  sim_end_time = 5.0
+  
   # Randomize spring stiffness
   spring_stiffness = (default_spring_stiffness if save_log
                       else [random.uniform(800, 2200) for i in range(4)])
@@ -120,7 +122,7 @@ def run_sim_and_eval_cost(cost, gains, sample_id):
   simulation_cmd = \
     ['bazel-bin/examples/Cassie/run_sim_and_walking',
      '--sample_id=%s' % sample_id,
-     '--end_time=5',
+     '--end_time=%.2f' % sim_end_time,
      '--publish_rate=100',
      '--target_realtime_rate=10',
      '--print_gains=' + str(save_log).lower(),
@@ -179,75 +181,84 @@ def run_sim_and_eval_cost(cost, gains, sample_id):
     act_map, "___", sample_id)
 
   try:
-    # TODO: need to fix the bug in error_y quaternioin (pelvis_balance_traj and pelvis_heading_traj)
-    # tracking cost
-    w_vel = 0  # 1/400
-    err = osc_debug['swing_ft_traj'].error_y
-    swing_ft_error_y_cost = 5 * np.sum(np.multiply(err, err))
-    cost += swing_ft_error_y_cost
-    err = osc_debug['swing_ft_traj'].error_ydot
-    swing_ft_error_ydot_cost = 5 * w_vel * np.sum(np.multiply(err, err))
-    cost += swing_ft_error_ydot_cost
-    err = osc_debug['lipm_traj'].error_y
-    lipm_error_y_cost = np.sum(np.multiply(err[:, 2], err[:, 2]))
-    cost += lipm_error_y_cost
-    err = osc_debug['pelvis_balance_traj'].error_y
-    pelvis_balance_error_y_cost = np.sum(np.multiply(err[:, :3], err[:, :3]))
-    cost += pelvis_balance_error_y_cost
-    err = osc_debug['swing_toe_traj'].error_y
-    swing_toe_error_y_cost = np.sum(np.multiply(err, err))
-    cost += swing_toe_error_y_cost
-    err = osc_debug['swing_toe_traj'].error_ydot
-    swing_toe_error_ydot_cost = w_vel * np.sum(np.multiply(err, err))
-    cost += swing_toe_error_ydot_cost
-    err = osc_debug['swing_hip_yaw_traj'].error_y
-    swing_hip_yaw_error_y_cost = np.sum(np.multiply(err, err))
-    cost += swing_hip_yaw_error_y_cost
-    err = osc_debug['swing_hip_yaw_traj'].error_ydot
-    swing_hip_yaw_error_ydot_cost = w_vel * np.sum(np.multiply(err, err))
-    cost += swing_hip_yaw_error_ydot_cost
-    err = osc_debug['pelvis_heading_traj'].error_ydot
-    pelvis_heading_error_ydot_cost = w_vel * np.sum(
-      np.multiply(err[:, 2], err[:, 2]))
-    cost += pelvis_heading_error_ydot_cost
+    # Penalize if the robot fail early
+    if not math.isclose(sim_end_time, t_x[-1]):
+      time_cost = remain_time_cost(sim_end_time - t_x[-1])
+      cost += time_cost
 
-    # effort cost
-    effort_cost = np.sum(np.multiply(u / 5000, u / 5000))
-    cost += effort_cost
+      if save_log:
+        print("Cost breakdown: ")
+        print("remain_time_cost: " + str(time_cost))
+    else:
+      # TODO: need to fix the bug in error_y quaternioin (pelvis_balance_traj and pelvis_heading_traj)
+      # tracking cost
+      w_vel = 0  # 1/400
+      err = osc_debug['swing_ft_traj'].error_y
+      swing_ft_error_y_cost = 5 * np.sum(np.multiply(err, err))
+      cost += swing_ft_error_y_cost
+      err = osc_debug['swing_ft_traj'].error_ydot
+      swing_ft_error_ydot_cost = 5 * w_vel * np.sum(np.multiply(err, err))
+      cost += swing_ft_error_ydot_cost
+      err = osc_debug['lipm_traj'].error_y
+      lipm_error_y_cost = np.sum(np.multiply(err[:, 2], err[:, 2]))
+      cost += lipm_error_y_cost
+      err = osc_debug['pelvis_balance_traj'].error_y
+      pelvis_balance_error_y_cost = np.sum(np.multiply(err[:, :3], err[:, :3]))
+      cost += pelvis_balance_error_y_cost
+      err = osc_debug['swing_toe_traj'].error_y
+      swing_toe_error_y_cost = np.sum(np.multiply(err, err))
+      cost += swing_toe_error_y_cost
+      err = osc_debug['swing_toe_traj'].error_ydot
+      swing_toe_error_ydot_cost = w_vel * np.sum(np.multiply(err, err))
+      cost += swing_toe_error_ydot_cost
+      err = osc_debug['swing_hip_yaw_traj'].error_y
+      swing_hip_yaw_error_y_cost = np.sum(np.multiply(err, err))
+      cost += swing_hip_yaw_error_y_cost
+      err = osc_debug['swing_hip_yaw_traj'].error_ydot
+      swing_hip_yaw_error_ydot_cost = w_vel * np.sum(np.multiply(err, err))
+      cost += swing_hip_yaw_error_ydot_cost
+      err = osc_debug['pelvis_heading_traj'].error_ydot
+      pelvis_heading_error_ydot_cost = w_vel * np.sum(
+        np.multiply(err[:, 2], err[:, 2]))
+      cost += pelvis_heading_error_ydot_cost
 
-    # spring acceleration cost
-    spring_cost = 0.0
-    t_diff = np.diff(t_x)
-    for name in spring_joint_names:
-      vel_diff = np.diff(x[:, nq + vel_map[name]])
-      vel_dot = vel_diff / t_diff
-      spring_cost += np.sum(np.multiply(vel_dot / 4000, vel_dot / 4000))
-    cost += spring_cost
+      # effort cost
+      effort_cost = np.sum(np.multiply(u / 5000, u / 5000))
+      cost += effort_cost
 
-    # d gain < 10 cost
-    d_gain_cost = 0.0
-    # doesn't include toe joint
-    for idx in [7, 10, 15, 16, 19, 26, 27, 28]:
-      d_gain_cost += math.exp(max(0, gains[idx] - 10)) - 1
-    cost += d_gain_cost
+      # spring acceleration cost
+      spring_cost = 0.0
+      t_diff = np.diff(t_x)
+      for name in spring_joint_names:
+        vel_diff = np.diff(x[:, nq + vel_map[name]])
+        vel_dot = vel_diff / t_diff
+        spring_cost += np.sum(np.multiply(vel_dot / 4000, vel_dot / 4000))
+      cost += spring_cost
 
-    if save_log:
-      print("Cost breakdown: ")
-      print("swing_ft_error_y: " + str(swing_ft_error_y_cost))
-      print("swing_ft_error_ydot: " + str(swing_ft_error_ydot_cost))
-      print("lipm_error_y: " + str(lipm_error_y_cost))
-      print("pelvis_balance_error_y: " + str(pelvis_balance_error_y_cost))
-      print("swing_toe_error_y: " + str(swing_toe_error_y_cost))
-      print("swing_toe_error_ydot: " + str(swing_toe_error_ydot_cost))
-      print("swing_hip_yaw_error_y: " + str(swing_hip_yaw_error_y_cost))
-      print("swing_hip_yaw_error_ydot: " + str(swing_hip_yaw_error_ydot_cost))
-      print("pelvis_heading_error_ydot: " + str(pelvis_heading_error_ydot_cost))
-      print("effort: " + str(effort_cost))
-      print("spring_cost: " + str(spring_cost))
-      print("d_gain_cost: " + str(d_gain_cost))
+      # d gain < 10 cost
+      d_gain_cost = 0.0
+      # doesn't include toe joint
+      for idx in [7, 10, 15, 16, 19, 26, 27, 28]:
+        d_gain_cost += math.exp(max(0, gains[idx] - 10)) - 1
+      cost += d_gain_cost
+
+      if save_log:
+        print("Cost breakdown: ")
+        print("swing_ft_error_y: " + str(swing_ft_error_y_cost))
+        print("swing_ft_error_ydot: " + str(swing_ft_error_ydot_cost))
+        print("lipm_error_y: " + str(lipm_error_y_cost))
+        print("pelvis_balance_error_y: " + str(pelvis_balance_error_y_cost))
+        print("swing_toe_error_y: " + str(swing_toe_error_y_cost))
+        print("swing_toe_error_ydot: " + str(swing_toe_error_ydot_cost))
+        print("swing_hip_yaw_error_y: " + str(swing_hip_yaw_error_y_cost))
+        print("swing_hip_yaw_error_ydot: " + str(swing_hip_yaw_error_ydot_cost))
+        print("pelvis_heading_error_ydot: " + str(pelvis_heading_error_ydot_cost))
+        print("effort: " + str(effort_cost))
+        print("spring_cost: " + str(spring_cost))
+        print("d_gain_cost: " + str(d_gain_cost))
   except:
     # There could be missing trajs when simulation terminates early
-    cost += 1000
+    cost += remain_time_cost(sim_end_time)
 
   # Delete log file
   if save_log:
@@ -256,6 +267,8 @@ def run_sim_and_eval_cost(cost, gains, sample_id):
 
   return cost
 
+def remain_time_cost(time_remain):
+  return 100 + 40 * time_remain
 
 def main():
   # Settings
