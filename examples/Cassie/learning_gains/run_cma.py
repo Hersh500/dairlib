@@ -30,6 +30,8 @@ from pydairlib.cassie.cassie_utils import *
 import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 
 
+# TODO: need to add a prompt in the beginning to avoid overwriting unsaved cma result
+
 # TODO: check each term of the cost and potentially save them
 # TODO: avoid negative gains (can we add constraints? otherwise add it to cost)
 # TODO: run one lcm-logger per channel name
@@ -84,24 +86,16 @@ def obj_func(x):
 
   # initialize cost
   cost = 0
-
-  # Penalize negative weights
-  for i in range(param_dim):
-    cost += 100 * (math.exp(max(0, -x[i])) - 1)
-    if gains[i] < 0:
-      cost += 50
-
-  if cost == 0:
-    n_trail_for_random_spring = (1 if save_log else 9)
-    for i in range(n_trail_for_random_spring):
-      cost = run_sim_and_eval_cost(cost, gains, sample_id)
-    cost /= n_trail_for_random_spring
+  n_trail_for_random_spring = (1 if save_log else 9)
+  for i in range(n_trail_for_random_spring):
+    cost = run_sim_and_eval_cost(cost, x, gains, sample_id)
+  cost /= n_trail_for_random_spring
 
   print("cost = " + str(cost))
   return cost
 
 
-def run_sim_and_eval_cost(cost, gains, sample_id):
+def run_sim_and_eval_cost(cost, cma_x, gains, sample_id):
   target_end_time = 5.0
   publish_rate = 100.0
 
@@ -111,7 +105,7 @@ def run_sim_and_eval_cost(cost, gains, sample_id):
 
   # Randomize initial pelvis disturbance
   pelvis_disturbance = ([0, 0, 0] if save_log
-                        else [random.uniform(-1, 1) for i in range(3)])
+                        else [random.uniform(-0.6, 0.6) for i in range(3)])
 
   # Run the simulation and lcm-logger
   log_path = dir + 'testlog' + str(sample_id)
@@ -196,40 +190,54 @@ def run_sim_and_eval_cost(cost, gains, sample_id):
       print("Cost breakdown: ")
       print("remain_time_cost: " + str(time_cost))
   else:
+    # Cost cap (to prevent extreme error cost caused by falling)
+    cost_cap = 50.0
+
     # TODO: need to fix the bug in error_y quaternioin (pelvis_balance_traj and pelvis_heading_traj)
     # tracking cost
     w_vel = 0  # 1/400
     err = osc_debug['swing_ft_traj'].error_y
     swing_ft_error_y_cost = 5 * np.sum(np.multiply(err, err))
+    swing_ft_error_y_cost = min(cost_cap, swing_ft_error_y_cost)
     cost += swing_ft_error_y_cost
     err = osc_debug['swing_ft_traj'].error_ydot
     swing_ft_error_ydot_cost = 5 * w_vel * np.sum(np.multiply(err, err))
+    swing_ft_error_ydot_cost = min(cost_cap, swing_ft_error_ydot_cost)
     cost += swing_ft_error_ydot_cost
     err = osc_debug['lipm_traj'].error_y
     lipm_error_y_cost = np.sum(np.multiply(err[:, 2], err[:, 2]))
+    lipm_error_y_cost = min(cost_cap, lipm_error_y_cost)
     cost += lipm_error_y_cost
     err = osc_debug['pelvis_balance_traj'].error_y
     pelvis_balance_error_y_cost = np.sum(np.multiply(err[:, :3], err[:, :3]))
+    pelvis_balance_error_y_cost = min(cost_cap, pelvis_balance_error_y_cost)
     cost += pelvis_balance_error_y_cost
     err = osc_debug['swing_toe_traj'].error_y
     swing_toe_error_y_cost = np.sum(np.multiply(err, err))
+    swing_toe_error_y_cost = min(cost_cap, swing_toe_error_y_cost)
     cost += swing_toe_error_y_cost
     err = osc_debug['swing_toe_traj'].error_ydot
     swing_toe_error_ydot_cost = w_vel * np.sum(np.multiply(err, err))
+    swing_toe_error_ydot_cost = min(cost_cap, swing_toe_error_ydot_cost)
     cost += swing_toe_error_ydot_cost
     err = osc_debug['swing_hip_yaw_traj'].error_y
     swing_hip_yaw_error_y_cost = np.sum(np.multiply(err, err))
+    swing_hip_yaw_error_y_cost = min(cost_cap, swing_hip_yaw_error_y_cost)
     cost += swing_hip_yaw_error_y_cost
     err = osc_debug['swing_hip_yaw_traj'].error_ydot
     swing_hip_yaw_error_ydot_cost = w_vel * np.sum(np.multiply(err, err))
+    swing_hip_yaw_error_ydot_cost = min(cost_cap, swing_hip_yaw_error_ydot_cost)
     cost += swing_hip_yaw_error_ydot_cost
     err = osc_debug['pelvis_heading_traj'].error_ydot
     pelvis_heading_error_ydot_cost = w_vel * np.sum(
       np.multiply(err[:, 2], err[:, 2]))
+    pelvis_heading_error_ydot_cost = min(cost_cap,
+      pelvis_heading_error_ydot_cost)
     cost += pelvis_heading_error_ydot_cost
 
     # effort cost
     effort_cost = np.sum(np.multiply(u / 5000, u / 5000))
+    effort_cost = min(cost_cap, effort_cost)
     cost += effort_cost
 
     # spring acceleration cost
@@ -239,14 +247,21 @@ def run_sim_and_eval_cost(cost, gains, sample_id):
       vel_diff = np.diff(x[:, nq + vel_map[name]])
       vel_dot = vel_diff / t_diff
       spring_cost += np.sum(np.multiply(vel_dot / 4000, vel_dot / 4000))
+    spring_cost = min(cost_cap, spring_cost)
     cost += spring_cost
 
-    # d gain < 10 cost
-    d_gain_cost = 0.0
+    # Penalize d gain < 10
     # doesn't include toe joint
-    for idx in [7, 10, 15, 16, 19, 26, 27, 28]:
-      d_gain_cost += math.exp(max(0, gains[idx] - 10)) - 1
+    largest_d_gains = max([gains[i] for i in (7, 10, 15, 16, 19, 26, 27, 28)])
+    d_gain_cost = math.exp(max(0, largest_d_gains - 10)) - 1
+    d_gain_cost = min(cost_cap, d_gain_cost)
     cost += d_gain_cost
+
+    # Penalize negative weights
+    most_negative_cma_x = min([cma_x[i] for i in range(param_dim)])
+    negative_gain_cost = math.exp(max(0, -most_negative_cma_x)) - 1
+    negative_gain_cost = min(cost_cap, negative_gain_cost)
+    cost += negative_gain_cost
 
     if save_log:
       print("Cost breakdown: ")
@@ -262,6 +277,7 @@ def run_sim_and_eval_cost(cost, gains, sample_id):
       print("effort: " + str(effort_cost))
       print("spring_cost: " + str(spring_cost))
       print("d_gain_cost: " + str(d_gain_cost))
+      print("negative_gain_cost: " + str(negative_gain_cost))
 
   # Delete log file
   if save_log:
@@ -272,7 +288,7 @@ def run_sim_and_eval_cost(cost, gains, sample_id):
 
 
 def remain_time_cost(time_remain):
-  return 100 + 40 * time_remain
+  return 200 + 40 * time_remain
 
 
 def main():
@@ -322,38 +338,38 @@ def main():
 
   # Initial guess
   x_init = param_dim * [1.0]
-  # x_init[0] = 0.273
-  # x_init[1] = 0.827
-  # x_init[2] = 0.429
-  # x_init[3] = 0.664
-  # x_init[4] = 2.520
-  # x_init[5] = 2.241
-  # x_init[6] = 1.330
-  # x_init[7] = 0.794
-  # x_init[8] = 2.526
-  # x_init[9] = 0.207
-  # x_init[10] = 0.983
-  # x_init[11] = 0.965
-  # x_init[12] = 1.266
-  # x_init[13] = 1.209
-  # x_init[14] = 1.292
-  # x_init[15] = 1.925
-  # x_init[16] = 0.402
-  # x_init[17] = 1.590
-  # x_init[18] = 1.939
-  # x_init[19] = 3.497
-  # x_init[20] = 2.021
-  # x_init[21] = 1.598
-  # x_init[22] = 0.299
-  # x_init[23] = 2.195
-  # x_init[24] = 1.023
-  # x_init[25] = 1.762
-  # x_init[26] = 0.979
-  # x_init[27] = 0.935
-  # x_init[28] = 0.998
+  x_init[0] = 0.273
+  x_init[1] = 0.827
+  x_init[2] = 0.429
+  x_init[3] = 0.664
+  x_init[4] = 2.520
+  x_init[5] = 2.241
+  x_init[6] = 1.330
+  x_init[7] = 0.794
+  x_init[8] = 2.526
+  x_init[9] = 0.207
+  x_init[10] = 0.983
+  x_init[11] = 0.965
+  x_init[12] = 1.266
+  x_init[13] = 1.209
+  x_init[14] = 1.292
+  x_init[15] = 1.925
+  x_init[16] = 0.402
+  x_init[17] = 1.590
+  x_init[18] = 1.939
+  x_init[19] = 3.497
+  x_init[20] = 2.021
+  x_init[21] = 1.598
+  x_init[22] = 0.299
+  x_init[23] = 2.195
+  x_init[24] = 1.023
+  x_init[25] = 1.762
+  x_init[26] = 0.979
+  x_init[27] = 0.935
+  x_init[28] = 0.998
 
   # Construct CMA
-  sigma_init = 0.5
+  sigma_init = 0.1
   es = cma.CMAEvolutionStrategy(x_init, sigma_init, {'popsize': popsize})
 
   # Save the initial log
