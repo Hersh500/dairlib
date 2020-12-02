@@ -158,6 +158,9 @@ DEFINE_double(pelvis_disturbnace_xdot, 0, "in m/s");
 DEFINE_double(pelvis_disturbnace_ydot, 0, "in m/s");
 DEFINE_double(pelvis_disturbnace_zdot, 0, "in m/s");
 
+DEFINE_double(random_joint_damping_min, -1, "");
+DEFINE_double(random_joint_damping_max, -1, "");
+
 DEFINE_string(sample_id, "", "");
 DEFINE_bool(print_gains, false, "");
 
@@ -242,6 +245,13 @@ int DoMain(int argc, char* argv[]) {
 
   drake::logging::set_log_level("err");  // ignore warnings about joint limits
 
+  std::vector<double> random_joint_damping_range = {};
+  if (FLAGS_random_joint_damping_min >= 0 and
+      FLAGS_random_joint_damping_max >= 0) {
+    random_joint_damping_range = {FLAGS_random_joint_damping_min,
+                                  FLAGS_random_joint_damping_max};
+  }
+
   // Plant/System initialization
   DiagramBuilder<double> builder;
   SceneGraph<double>& scene_graph = *builder.AddSystem<SceneGraph>();
@@ -253,7 +263,8 @@ int DoMain(int argc, char* argv[]) {
   multibody::addFlatTerrain(&plant_sim, &scene_graph, .8, .8);
   addCassieMultibody(&plant_sim, &scene_graph, true, urdf, true, true,
                      {FLAGS_knee_spring_left, FLAGS_knee_spring_right,
-                      FLAGS_ankle_spring_left, FLAGS_ankle_spring_right});
+                      FLAGS_ankle_spring_left, FLAGS_ankle_spring_right},
+                     random_joint_damping_range);
   plant_sim.Finalize();
 
   plant_sim.set_penetration_allowance(FLAGS_penetration_allowance);

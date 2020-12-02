@@ -46,6 +46,9 @@ import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 
 # TODO: can try effort dot to cost
 
+# There doesn't seem to be an easy way to change joint damping coefficient
+# https://github.com/RobotLocomotion/drake/blob/838160f3813be33eda8ff42f424b1887076bcbdc/multibody/tree/revolute_joint.h#L121
+
 def obj_func(x):
   sample_id = ""
   if not save_log:
@@ -86,7 +89,7 @@ def obj_func(x):
 
   # initialize cost
   cost = 0
-  n_trail_for_random_spring = (1 if save_log else 9)
+  n_trail_for_random_spring = (1 if save_log else 27)
   for i in range(n_trail_for_random_spring):
     cost = run_sim_and_eval_cost(cost, x, gains, sample_id)
   cost /= n_trail_for_random_spring
@@ -102,10 +105,12 @@ def run_sim_and_eval_cost(cost, cma_x, gains, sample_id):
   # Randomize spring stiffness
   spring_stiffness = (default_spring_stiffness if save_log
                       else [random.uniform(800, 2200) for i in range(4)])
-
+  # Randomize joint damping
+  joint_damping_min = (-1.0 if save_log else 0.1)
+  joint_damping_max = (-1.0 if save_log else 2.5)
   # Randomize initial pelvis disturbance
   pelvis_disturbance = ([0, 0, 0] if save_log
-                        else [random.uniform(-0.6, 0.6) for i in range(3)])
+                        else [random.uniform(-0.1, 0.1) for i in range(3)])
 
   # Run the simulation and lcm-logger
   log_path = dir + 'testlog' + str(sample_id)
@@ -128,6 +133,8 @@ def run_sim_and_eval_cost(cost, cma_x, gains, sample_id):
      '--pelvis_disturbnace_xdot=%.2f' % pelvis_disturbance[0],
      '--pelvis_disturbnace_ydot=%.2f' % pelvis_disturbance[1],
      '--pelvis_disturbnace_zdot=%.2f' % pelvis_disturbance[2],
+     '--random_joint_damping_min=%.2f' % joint_damping_min,
+     '--random_joint_damping_max=%.2f' % joint_damping_max,
      '--w_accel=%.8f' % gains[0],
      '--w_soft_constraint=%.2f' % gains[1],
      '--w_swing_toe=%.2f' % gains[2],
@@ -314,7 +321,7 @@ def main():
   plant, scene_graph = AddMultibodyPlantSceneGraph(builder, 0.0)
   pydairlib.cassie.cassie_utils.addCassieMultibody(plant, scene_graph, True,
     "examples/Cassie/urdf/cassie_v2.urdf", False, False,
-    default_spring_stiffness)
+    default_spring_stiffness, [])
   plant.Finalize()
 
   pos_map = pydairlib.multibody.makeNameToPositionsMap(plant)

@@ -29,7 +29,7 @@ PYBIND11_MODULE(cassie_utils, m) {
            py::arg("plant"), py::arg("scene_graph"), py::arg("floating_base"),
            py::arg("filename"),
            py::arg("add_leaf_springs"), py::arg("add_loop_closure"),
-           py::arg("spring_stiffness"));
+           py::arg("spring_stiffness"), py::arg("random_joint_damping_range"));
 }
 
 }  // namespace pydairlib

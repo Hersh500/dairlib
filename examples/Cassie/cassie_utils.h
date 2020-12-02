@@ -72,7 +72,8 @@ void addCassieMultibody(
     bool floating_base = true,
     std::string filename = "examples/Cassie/urdf/cassie_v2.urdf",
     bool add_leaf_springs = true, bool add_loop_closure = true,
-    std::vector<double> spring_stiffness = {1500, 1500, 1250, 1250});
+    std::vector<double> spring_stiffness = {1500, 1500, 1250, 1250},
+    std::vector<double> random_joint_damping_range = {});
 
 /// Add simulated gyroscope and accelerometer along with sensor aggregator,
 /// which creates and publishes a simulated lcmt_cassie_out LCM message.

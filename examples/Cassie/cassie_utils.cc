@@ -24,6 +24,8 @@ using drake::systems::sensors::Gyroscope;
 using Eigen::Vector3d;
 using Eigen::VectorXd;
 
+using drake::multibody::RevoluteJoint;
+
 template <typename T>
 std::pair<const Vector3d, const Frame<T>&> LeftToeFront(
     const MultibodyPlant<T>& plant) {
@@ -107,7 +109,8 @@ void addCassieMultibody(MultibodyPlant<double>* plant,
                         SceneGraph<double>* scene_graph, bool floating_base,
                         std::string filename, bool add_leaf_springs,
                         bool add_loop_closure,
-                        std::vector<double> spring_stiffness) {
+                        std::vector<double> spring_stiffness,
+                        std::vector<double> random_joint_damping_range) {
   std::string full_name = FindResourceOrThrow(filename);
   Parser parser(plant, scene_graph);
   parser.AddModelFromFile(full_name);
@@ -182,6 +185,25 @@ void addCassieMultibody(MultibodyPlant<double>* plant,
       DRAKE_DEMAND(motor_joint_names[i] == joint_actuator.name());
     }
   }
+
+  // Modify joint stiffness
+  if (!random_joint_damping_range.empty()) {
+    std::random_device randgen;
+    std::default_random_engine random_eng(randgen());
+    std::uniform_real_distribution<> distribution(
+        random_joint_damping_range[0], random_joint_damping_range[1]);
+
+    std::vector<std::string> joint_names = {
+        "hip_roll_left",    "hip_yaw_left", "hip_pitch_left",    "knee_left",
+        "ankle_joint_left", "toe_left",     "hip_roll_right",    "hip_yaw_right",
+        "hip_pitch_right",  "knee_right",   "ankle_joint_right", "toe_right"};
+
+    for (auto name : joint_names) {
+      RevoluteJoint<double>& joint =
+          plant->GetMutableJointByName<RevoluteJoint>(name);
+      joint.set_damping(distribution(random_eng));
+    }
+  }
 }
 
 const systems::SimCassieSensorAggregator& AddImuAndAggregator(
@@ -200,8 +222,7 @@ const systems::SimCassieSensorAggregator& AddImuAndAggregator(
 
   auto sensor_aggregator =
       builder->AddSystem<systems::SimCassieSensorAggregator>(plant);
-  builder->Connect(actuation_port,
-                   sensor_aggregator->get_input_port_input());
+  builder->Connect(actuation_port, sensor_aggregator->get_input_port_input());
   builder->Connect(plant.get_state_output_port(),
                    sensor_aggregator->get_input_port_state());
   builder->Connect(accelerometer.get_measurement_output_port(),
