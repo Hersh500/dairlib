@@ -33,18 +33,24 @@ import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 # TODO: need to add a prompt in the beginning to avoid overwriting unsaved cma result
 
 # TODO: check each term of the cost and potentially save them
-# TODO: avoid negative gains (can we add constraints? otherwise add it to cost)
 # TODO: run one lcm-logger per channel name
 
 # TODO: make the termination condition looser (sigma can be 5e-3)
 
 # TODO fix the bug in swing foot desired traj when fsm switching
 
-# TODO: Can probably add noise and add delay to the simulation
-
 # TODO: check if lcm-logger could miss data when data rate is high and when doing multithreading
 
+# TODO: vary terrain height?
+
+# TODO: add dispatcher to the loop
+
+# TODO: add more parameters to learn
+
 # TODO: can try effort dot to cost
+# TODO: add pelvis vel tracking to cost
+
+# TODO: swing foot is oscillating. Maybe we can add swing foot acceleration to cost?
 
 # There doesn't seem to be an easy way to change joint damping coefficient
 # https://github.com/RobotLocomotion/drake/blob/838160f3813be33eda8ff42f424b1887076bcbdc/multibody/tree/revolute_joint.h#L121
@@ -345,35 +351,35 @@ def main():
 
   # Initial guess
   x_init = param_dim * [1.0]
-  x_init[0] = 0.273
-  x_init[1] = 0.827
-  x_init[2] = 0.429
-  x_init[3] = 0.664
-  x_init[4] = 2.520
-  x_init[5] = 2.241
-  x_init[6] = 1.330
-  x_init[7] = 0.794
-  x_init[8] = 2.526
-  x_init[9] = 0.207
-  x_init[10] = 0.983
-  x_init[11] = 0.965
-  x_init[12] = 1.266
-  x_init[13] = 1.209
-  x_init[14] = 1.292
-  x_init[15] = 1.925
-  x_init[16] = 0.402
-  x_init[17] = 1.590
-  x_init[18] = 1.939
-  x_init[19] = 3.497
-  x_init[20] = 2.021
-  x_init[21] = 1.598
-  x_init[22] = 0.299
-  x_init[23] = 2.195
-  x_init[24] = 1.023
-  x_init[25] = 1.762
-  x_init[26] = 0.979
-  x_init[27] = 0.935
-  x_init[28] = 0.998
+  x_init[0] = 0.332
+  x_init[1] = 0.822
+  x_init[2] = 0.440
+  x_init[3] = 0.556
+  x_init[4] = 2.583
+  x_init[5] = 2.372
+  x_init[6] = 1.388
+  x_init[7] = 0.846
+  x_init[8] = 2.573
+  x_init[9] = 0.237
+  x_init[10] = 0.845
+  x_init[11] = 1.050
+  x_init[12] = 1.391
+  x_init[13] = 1.367
+  x_init[14] = 1.308
+  x_init[15] = 2.040
+  x_init[16] = 0.426
+  x_init[17] = 1.655
+  x_init[18] = 2.045
+  x_init[19] = 3.645
+  x_init[20] = 2.022
+  x_init[21] = 1.546
+  x_init[22] = 0.175
+  x_init[23] = 2.059
+  x_init[24] = 0.971
+  x_init[25] = 1.721
+  x_init[26] = 0.991
+  x_init[27] = 0.944
+  x_init[28] = 0.982
 
   # Construct CMA
   sigma_init = 0.1
