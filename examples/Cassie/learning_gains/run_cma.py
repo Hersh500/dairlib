@@ -117,7 +117,7 @@ def run_sim_and_eval_cost(cost, cma_x, gains, sample_id):
   joint_damping_max = (-1.0 if save_log else 2.5)
   # Randomize initial pelvis disturbance
   pelvis_disturbance = ([0, 0, 0] if save_log
-                        else [random.uniform(-0.1, 0.1) for i in range(3)])
+                        else [random.uniform(-0, 0) for i in range(3)])
 
   # Run the simulation and lcm-logger
   log_path = dir + 'testlog' + str(sample_id)
@@ -397,17 +397,17 @@ def main():
   save_log = False
 
   # Optimize
-  # es.optimize(obj_func, n_jobs=n_theads)
-  # es.result_pretty()
-  #
-  # # Save the log of the best solution
-  # save_log = True
-  # obj_func(es.result.xbest.tolist())
-  # save_log = False
-  #
-  # print(es.popsize)
-  # print(es.opts)
-  # pdb.set_trace()
+  es.optimize(obj_func, n_jobs=n_theads)
+  es.result_pretty()
+
+  # Save the log of the best solution
+  save_log = True
+  obj_func(es.result.xbest.tolist())
+  save_log = False
+
+  print(es.popsize)
+  print(es.opts)
+  pdb.set_trace()
 
 
 if __name__ == "__main__":
