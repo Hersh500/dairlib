@@ -149,6 +149,10 @@ DEFINE_double(k_d_swing_foot_x, 10, "");
 DEFINE_double(k_d_swing_foot_y, 10, "");
 DEFINE_double(k_d_swing_foot_z, 10, "");
 
+DEFINE_double(mid_foot_height, 0.05, "");
+
+DEFINE_double(double_support_duration, 0.02, "");
+
 DEFINE_double(knee_spring_left, 1500, "");
 DEFINE_double(knee_spring_right, 1500, "");
 DEFINE_double(ankle_spring_left, 1250, "");
@@ -193,6 +197,7 @@ struct OSCWalkingGains {
   double final_foot_height;
   double final_foot_velocity_z;
   double lipm_height;
+  double double_support_duration;
 
   template <typename Archive>
   void Serialize(Archive* a) {
@@ -226,6 +231,8 @@ struct OSCWalkingGains {
     a->Visit(DRAKE_NVP(final_foot_velocity_z));
     // lipm heursitics
     a->Visit(DRAKE_NVP(lipm_height));
+
+    a->Visit(DRAKE_NVP(double_support_duration));
   }
 };
 
@@ -410,6 +417,8 @@ int DoMain(int argc, char* argv[]) {
   gains.w_hip_yaw = FLAGS_w_hip_yaw;
   gains.hip_yaw_kp = FLAGS_hip_yaw_kp;
   gains.hip_yaw_kd = FLAGS_hip_yaw_kd;
+  gains.mid_foot_height = FLAGS_mid_foot_height;
+  gains.double_support_duration = FLAGS_double_support_duration;
   W_com(2, 2) = FLAGS_w_com_z;
   K_p_com(2, 2) = FLAGS_k_p_com_z;
   K_d_com(2, 2) = FLAGS_k_d_com_z;
@@ -444,15 +453,18 @@ int DoMain(int argc, char* argv[]) {
     std::cout << "w_hip_yaw: " << gains.w_hip_yaw << std::endl;
     std::cout << "hip_yaw_kp: " << gains.hip_yaw_kp << std::endl;
     std::cout << "hip_yaw_kd: " << gains.hip_yaw_kd << std::endl;
+    std::cout << "mid_foot_height: " << gains.mid_foot_height << std::endl;
+    std::cout << "double_support_duration: \n"
+              << gains.double_support_duration << std::endl;
     std::cout << "COM W: \n" << W_com << std::endl;
     std::cout << "COM Kp: \n" << K_p_com << std::endl;
     std::cout << "COM Kd: \n" << K_d_com << std::endl;
-    std::cout << "Pelvis Heading W: \n" << W_pelvis_heading << std::endl;
-    std::cout << "Pelvis Heading Kp: \n" << K_p_pelvis_heading << std::endl;
-    std::cout << "Pelvis Heading Kd: \n" << K_d_pelvis_heading << std::endl;
     std::cout << "Pelvis Balance W: \n" << W_pelvis_balance << std::endl;
     std::cout << "Pelvis Balance Kp: \n" << K_p_pelvis_balance << std::endl;
     std::cout << "Pelvis Balance Kd: \n" << K_d_pelvis_balance << std::endl;
+    std::cout << "Pelvis Heading W: \n" << W_pelvis_heading << std::endl;
+    std::cout << "Pelvis Heading Kp: \n" << K_p_pelvis_heading << std::endl;
+    std::cout << "Pelvis Heading Kd: \n" << K_d_pelvis_heading << std::endl;
     std::cout << "Swing Foot W: \n" << W_swing_foot << std::endl;
     std::cout << "Swing Foot Kp: \n" << K_p_swing_foot << std::endl;
     std::cout << "Swing Foot Kd: \n" << K_d_swing_foot << std::endl;
@@ -552,7 +564,7 @@ int DoMain(int argc, char* argv[]) {
   int double_support_state = 2;
   double left_support_duration = 0.35;
   double right_support_duration = 0.35;
-  double double_support_duration = 0.02;
+  double double_support_duration = gains.double_support_duration;
   vector<int> fsm_states;
   vector<double> state_durations;
   if (FLAGS_is_two_phase) {

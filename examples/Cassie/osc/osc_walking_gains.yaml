@@ -18,6 +18,8 @@ final_foot_velocity_z: 0.0
 mid_foot_height: 0.05
 lipm_height: 0.95
 
+double_support_duration: 0.02
+
 CoMW:
   [  0,    0,     0,
      0,   0,     0,

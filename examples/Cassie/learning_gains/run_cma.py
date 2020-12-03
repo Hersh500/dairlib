@@ -43,14 +43,13 @@ import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 
 # TODO: vary terrain height?
 
+# TODO: swing foot is oscillating. Maybe we can add swing foot acceleration to cost?
+
 # TODO: add dispatcher to the loop
-
 # TODO: add more parameters to learn
-
 # TODO: can try effort dot to cost
 # TODO: add pelvis vel tracking to cost
-
-# TODO: swing foot is oscillating. Maybe we can add swing foot acceleration to cost?
+# TODO: time-varying gains
 
 # There doesn't seem to be an easy way to change joint damping coefficient
 # https://github.com/RobotLocomotion/drake/blob/838160f3813be33eda8ff42f424b1887076bcbdc/multibody/tree/revolute_joint.h#L121
@@ -92,6 +91,8 @@ def obj_func(x):
   gains[26] = x[26] * yaml_gains['SwingFootKd'][0]
   gains[27] = x[27] * yaml_gains['SwingFootKd'][4]
   gains[28] = x[28] * yaml_gains['SwingFootKd'][8]
+  gains[29] = x[29] * yaml_gains['mid_foot_height']
+  gains[30] = x[30] * yaml_gains['double_support_duration']
 
   # initialize cost
   cost = 0
@@ -170,6 +171,8 @@ def run_sim_and_eval_cost(cost, cma_x, gains, sample_id):
      '--k_d_swing_foot_x=%.2f' % gains[26],
      '--k_d_swing_foot_y=%.2f' % gains[27],
      '--k_d_swing_foot_z=%.2f' % gains[28],
+     '--mid_foot_height=%.2f' % gains[29],
+     '--double_support_duration=%.2f' % gains[30],
      (' | tee -a ' + dir + 'gains' if save_log else ''),
      ]
   if save_log:
@@ -311,10 +314,11 @@ def main():
   dir = "../dairlib_data/cassie_cma/"
   n_theads = 12
 
-  # Parameters
+  # Parameters for CMA
   global param_dim, popsize
-  param_dim = 29
+  param_dim = 31
   popsize = param_dim * 2
+  sigma_init = 0.1
 
   # Create folder
   Path(dir).mkdir(parents=True, exist_ok=True)
@@ -351,38 +355,39 @@ def main():
 
   # Initial guess
   x_init = param_dim * [1.0]
-  x_init[0] = 0.332
-  x_init[1] = 0.822
-  x_init[2] = 0.440
-  x_init[3] = 0.556
-  x_init[4] = 2.583
-  x_init[5] = 2.372
-  x_init[6] = 1.388
-  x_init[7] = 0.846
-  x_init[8] = 2.573
-  x_init[9] = 0.237
-  x_init[10] = 0.845
-  x_init[11] = 1.050
-  x_init[12] = 1.391
-  x_init[13] = 1.367
-  x_init[14] = 1.308
-  x_init[15] = 2.040
-  x_init[16] = 0.426
-  x_init[17] = 1.655
-  x_init[18] = 2.045
-  x_init[19] = 3.645
-  x_init[20] = 2.022
-  x_init[21] = 1.546
-  x_init[22] = 0.175
-  x_init[23] = 2.059
-  x_init[24] = 0.971
-  x_init[25] = 1.721
-  x_init[26] = 0.991
-  x_init[27] = 0.944
-  x_init[28] = 0.982
+  x_init[0] = 0.321
+  x_init[1] = 0.978
+  x_init[2] = 0.267
+  x_init[3] = 0.397
+  x_init[4] = 2.507
+  x_init[5] = 2.227
+  x_init[6] = 1.445
+  x_init[7] = 0.779
+  x_init[8] = 2.677
+  x_init[9] = 0.211
+  x_init[10] = 0.731
+  x_init[11] = 1.068
+  x_init[12] = 1.553
+  x_init[13] = 1.503
+  x_init[14] = 1.256
+  x_init[15] = 2.030
+  x_init[16] = 0.382
+  x_init[17] = 1.695
+  x_init[18] = 1.983
+  x_init[19] = 3.826
+  x_init[20] = 2.166
+  x_init[21] = 1.573
+  x_init[22] = 0.095
+  x_init[23] = 1.859
+  x_init[24] = 0.933
+  x_init[25] = 1.696
+  x_init[26] = 1.002
+  x_init[27] = 0.994
+  x_init[28] = 0.997
+  x_init[29] = 1
+  x_init[30] = 3
 
   # Construct CMA
-  sigma_init = 0.1
   es = cma.CMAEvolutionStrategy(x_init, sigma_init, {'popsize': popsize})
 
   # Save the initial log
@@ -392,17 +397,17 @@ def main():
   save_log = False
 
   # Optimize
-  es.optimize(obj_func, n_jobs=n_theads)
-  es.result_pretty()
-
-  # Save the log of the best solution
-  save_log = True
-  obj_func(es.result.xbest.tolist())
-  save_log = False
-
-  print(es.popsize)
-  print(es.opts)
-  pdb.set_trace()
+  # es.optimize(obj_func, n_jobs=n_theads)
+  # es.result_pretty()
+  #
+  # # Save the log of the best solution
+  # save_log = True
+  # obj_func(es.result.xbest.tolist())
+  # save_log = False
+  #
+  # print(es.popsize)
+  # print(es.opts)
+  # pdb.set_trace()
 
 
 if __name__ == "__main__":
