@@ -109,6 +109,7 @@ DEFINE_int32(
     "1 uses the neutral point derived from LIPM given the stance duration");
 
 // Simulation parameters.
+DEFINE_bool(is_time_delay, true, "");
 DEFINE_double(target_realtime_rate, 1.0,
               "Desired rate relative to real time.  See documentation for "
               "Simulator::set_target_realtime_rate() for details.");
@@ -346,13 +347,6 @@ int DoMain(int argc, char* argv[]) {
   //          FLAGS_publish_rate));
   //  contact_results_publisher.set_name("contact_results_publisher");
 
-  // Sensor aggregator and publisher of lcmt_cassie_out
-  const auto& sensor_aggregator =
-      AddImuAndAggregator(&builder, plant_sim, passthrough->get_output_port());
-  //  auto sensor_pub =
-  //      builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_cassie_out>(
-  //          "CASSIE_OUTPUT" + suffix, &lcm_local, 1.0 / FLAGS_publish_rate));
-
   // Connect leaf systems
   //  builder.Connect(*input_sub, *input_receiver);
   builder.Connect(*input_receiver, *passthrough);
@@ -368,8 +362,6 @@ int DoMain(int argc, char* argv[]) {
                   contact_viz.get_input_port(0));
   //  builder.Connect(contact_viz.get_output_port(0),
   //                  contact_results_publisher.get_input_port());
-  //  builder.Connect(sensor_aggregator.get_output_port(0),
-  //                  sensor_pub->get_input_port());
 
   // Zero order hold for the robot input
   //  builder.Connect(passthrough->get_output_port(),
@@ -380,9 +372,8 @@ int DoMain(int argc, char* argv[]) {
           kPeriod, plant_sim.num_actuators());
   builder.Connect(passthrough->get_output_port(),
                   input_zero_order_hold->get_input_port());
-  bool is_time_delay = true;
-  double time_delay = 0.014;
-  if (is_time_delay) {
+  if (FLAGS_is_time_delay) {
+    double time_delay = 0.014;
     auto time_delay_block =
         builder.AddSystem<drake::systems::DiscreteTimeDelay<double>>(
             kPeriod, int(time_delay / kPeriod), plant_sim.num_actuators());
@@ -395,6 +386,15 @@ int DoMain(int argc, char* argv[]) {
     builder.Connect(input_zero_order_hold->get_output_port(),
                     plant_sim.get_actuation_input_port());
   }
+
+  // Sensor aggregator and publisher of lcmt_cassie_out
+  const auto& sensor_aggregator = AddImuAndAggregator(
+      &builder, plant_sim, input_zero_order_hold->get_output_port());
+  //  auto sensor_pub =
+  //      builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_cassie_out>(
+  //          "CASSIE_OUTPUT" + suffix, &lcm_local, 1.0 / FLAGS_publish_rate));
+  //  builder.Connect(sensor_aggregator.get_output_port(0),
+  //                  sensor_pub->get_input_port());
 
   ////// Dispatcher //////
 

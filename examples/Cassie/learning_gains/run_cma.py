@@ -130,6 +130,7 @@ def run_sim_and_eval_cost(cost, cma_x, gains, sample_id):
   simulation_cmd = \
     ['bazel-bin/examples/Cassie/run_sim_dispatcher_and_walking',
      '--sample_id=%s' % sample_id,
+     '--is_time_delay=true',
      '--use_dispatcher=true',
      '--end_time=%.2f' % target_end_time,
      '--publish_rate=%.2f' % publish_rate,
