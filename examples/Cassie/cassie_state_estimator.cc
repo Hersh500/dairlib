@@ -46,7 +46,7 @@ CassieStateEstimator::CassieStateEstimator(
     const KinematicEvaluatorSet<double>* left_contact_evaluator,
     const KinematicEvaluatorSet<double>* right_contact_evaluator,
     bool test_with_ground_truth_state, bool print_info_to_terminal,
-    int hardware_test_mode, bool is_per_step_update)
+    int hardware_test_mode, bool is_periodic_update)
     : plant_(plant),
       fourbar_evaluator_(fourbar_evaluator),
       left_contact_evaluator_(left_contact_evaluator),
@@ -64,8 +64,7 @@ CassieStateEstimator::CassieStateEstimator(
       context_gt_(plant_.CreateDefaultContext()),
       test_with_ground_truth_state_(test_with_ground_truth_state),
       print_info_to_terminal_(print_info_to_terminal),
-      hardware_test_mode_(hardware_test_mode),
-      is_per_step_update_(is_per_step_update) {
+      hardware_test_mode_(hardware_test_mode) {
   DRAKE_DEMAND(&fourbar_evaluator->plant() == &plant);
   DRAKE_DEMAND(&left_contact_evaluator->plant() == &plant);
   DRAKE_DEMAND(&right_contact_evaluator->plant() == &plant);
@@ -99,8 +98,8 @@ CassieStateEstimator::CassieStateEstimator(
   velocity_idx_map_ = multibody::makeNameToVelocitiesMap(plant);
 
   if (is_floating_base_) {
-    if (is_per_step_update) {
-      DeclarePerStepUnrestrictedUpdateEvent(&CassieStateEstimator::Update);
+    if (is_periodic_update) {
+      DeclarePeriodicUnrestrictedUpdateEvent(0.001, 0, &CassieStateEstimator::Update);
     }
 
     // Middle point between the front and the rear contact points
@@ -985,12 +984,6 @@ EventStatus CassieStateEstimator::Update(
   double current_time = context.get_time();
   double prev_t =
       state->get_discrete_state().get_vector(time_idx_).get_value()(0);
-
-  if (is_per_step_update_) {
-    if (!(current_time >= prev_t + 1e-3)) {
-      return EventStatus::Succeeded();
-    }
-  }
 
   double dt = current_time - prev_t;
   if (print_info_to_terminal_) {

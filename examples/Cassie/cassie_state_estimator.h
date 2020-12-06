@@ -64,7 +64,7 @@ class CassieStateEstimator : public drake::systems::LeafSystem<double> {
       const multibody::KinematicEvaluatorSet<double>* right_contact_evaluator,
       bool test_with_ground_truth_state = false,
       bool print_info_to_terminal = false, int hardware_test_mode = -1,
-      bool is_per_step_update = false);
+      bool is_periodic_update = false);
 
   const drake::systems::OutputPort<double>& get_robot_output_port() const {
     return this->get_output_port(output_vector_output_port_);
@@ -290,9 +290,6 @@ class CassieStateEstimator : public drake::systems::LeafSystem<double> {
   // Contacts
   const int num_contacts_ = 2;
   const std::vector<std::string> contact_names_ = {"left", "right"};
-
-  // learning
-  bool is_per_step_update_; // need this when we are not using lcm driven loop
 };
 
 }  // namespace systems
