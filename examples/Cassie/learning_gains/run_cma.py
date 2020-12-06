@@ -128,8 +128,9 @@ def run_sim_and_eval_cost(cost, cma_x, gains, sample_id):
                 '%s' % log_path,
                 ]
   simulation_cmd = \
-    ['bazel-bin/examples/Cassie/run_sim_and_walking',
+    ['bazel-bin/examples/Cassie/run_sim_dispatcher_and_walking',
      '--sample_id=%s' % sample_id,
+     '--use_dispatcher=true',
      '--end_time=%.2f' % target_end_time,
      '--publish_rate=%.2f' % publish_rate,
      '--target_realtime_rate=10',
@@ -398,17 +399,17 @@ def main():
   save_log = False
 
   # Optimize
-  es.optimize(obj_func, n_jobs=n_theads)
-  es.result_pretty()
-
-  # Save the log of the best solution
-  save_log = True
-  obj_func(es.result.xbest.tolist())
-  save_log = False
-
-  print(es.popsize)
-  print(es.opts)
-  pdb.set_trace()
+  # es.optimize(obj_func, n_jobs=n_theads)
+  # es.result_pretty()
+  #
+  # # Save the log of the best solution
+  # save_log = True
+  # obj_func(es.result.xbest.tolist())
+  # save_log = False
+  #
+  # print(es.popsize)
+  # print(es.opts)
+  # pdb.set_trace()
 
 
 if __name__ == "__main__":

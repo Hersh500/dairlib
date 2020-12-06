@@ -477,3 +477,27 @@ cc_binary(
         "@gflags",
     ],
 )
+
+cc_binary(
+    name = "run_sim_dispatcher_and_walking",
+    srcs = ["run_sim_dispatcher_and_walking.cc"],
+    deps = [
+        ":cassie_fixed_point_solver",
+        ":cassie_state_estimator",
+        ":cassie_urdf",
+        ":cassie_utils",
+        ":simulator_drift",
+        "//examples/Cassie/networking:cassie_udp_pub_sub",
+        "//examples/Cassie/networking:udp_driven_loop",
+        "//examples/Cassie/osc",
+        "//lcmtypes:lcmt_robot",
+        "//multibody:multibody_solvers",
+        "//multibody:utils",
+        "//systems:robot_lcm_systems",
+        "//systems/controllers:fsm_event_time",
+        "//systems/framework:lcm_driven_loop",
+        "//systems/primitives",
+        "@drake//:drake_shared_library",
+        "@gflags",
+    ],
+)
