@@ -338,9 +338,10 @@ int DoMain(int argc, char* argv[]) {
   auto state_sender = builder.AddSystem<systems::RobotOutputSender>(plant_sim);
 
   // Contact Information
-  ContactResultsToLcmSystem<double>& contact_viz =
-      *builder.template AddSystem<ContactResultsToLcmSystem<double>>(plant_sim);
-  contact_viz.set_name("contact_visualization");
+  //  ContactResultsToLcmSystem<double>& contact_viz =
+  //      *builder.template
+  //      AddSystem<ContactResultsToLcmSystem<double>>(plant_sim);
+  //  contact_viz.set_name("contact_visualization");
   //  auto& contact_results_publisher = *builder.AddSystem(
   //      LcmPublisherSystem::Make<drake::lcmt_contact_results_for_viz>(
   //          "CASSIE_CONTACT_DRAKE" + suffix, &lcm_local, 1.0 /
@@ -358,8 +359,8 @@ int DoMain(int argc, char* argv[]) {
       scene_graph.get_source_pose_port(plant_sim.get_source_id().value()));
   builder.Connect(scene_graph.get_query_output_port(),
                   plant_sim.get_geometry_query_input_port());
-  builder.Connect(plant_sim.get_contact_results_output_port(),
-                  contact_viz.get_input_port(0));
+  //  builder.Connect(plant_sim.get_contact_results_output_port(),
+  //                  contact_viz.get_input_port(0));
   //  builder.Connect(contact_viz.get_output_port(0),
   //                  contact_results_publisher.get_input_port());
 
@@ -438,7 +439,8 @@ int DoMain(int argc, char* argv[]) {
   // Create state estimator
   auto state_estimator = builder.AddSystem<systems::CassieStateEstimator>(
       plant_ctrl, &fourbar_evaluator, &left_contact_evaluator,
-      &right_contact_evaluator, false, FLAGS_print_ekf_info, FLAGS_test_mode);
+      &right_contact_evaluator, false, FLAGS_print_ekf_info, FLAGS_test_mode,
+      true);
 
   // Connect appropriate input receiver for simulation
   systems::CassieOutputReceiver* cassie_output_receiver = nullptr;
@@ -991,8 +993,10 @@ int DoMain(int argc, char* argv[]) {
   plant_sim.SetVelocities(&plant_context, v_init);
 
   // Set EKF time and initial states
-  setInitialEkfState(0, q_init, *diagram, *state_estimator,
-                     diagram_context.get());
+  if (FLAGS_use_dispatcher) {
+    setInitialEkfState(0, q_init, *diagram, *state_estimator,
+                       diagram_context.get());
+  }
 
   Simulator<double> simulator(*diagram, std::move(diagram_context));
 
