@@ -436,74 +436,77 @@ int DoMain(int argc, char* argv[]) {
   right_contact_evaluator.add_evaluator(&right_toe_evaluator);
   right_contact_evaluator.add_evaluator(&right_heel_evaluator);
 
-  // Create state estimator
-  auto state_estimator = builder.AddSystem<systems::CassieStateEstimator>(
-      plant_ctrl, &fourbar_evaluator, &left_contact_evaluator,
-      &right_contact_evaluator, false, FLAGS_print_ekf_info, FLAGS_test_mode,
-      true);
+  systems::CassieStateEstimator* state_estimator = nullptr;
+  systems::RobotOutputSender* robot_output_sender = nullptr;
 
-  // Connect appropriate input receiver for simulation
-  systems::CassieOutputReceiver* cassie_output_receiver = nullptr;
-  cassie_output_receiver = builder.AddSystem<systems::CassieOutputReceiver>();
   if (FLAGS_use_dispatcher) {
+    // Create state estimator
+    state_estimator = builder.AddSystem<systems::CassieStateEstimator>(
+        plant_ctrl, &fourbar_evaluator, &left_contact_evaluator,
+        &right_contact_evaluator, false, FLAGS_print_ekf_info, FLAGS_test_mode,
+        true);
+
+    // Connect appropriate input receiver for simulation
+    systems::CassieOutputReceiver* cassie_output_receiver =
+        builder.AddSystem<systems::CassieOutputReceiver>();
     builder.Connect(sensor_aggregator.get_output_port(0),
                     cassie_output_receiver->get_input_port(0));
-  }
-  builder.Connect(cassie_output_receiver->get_output_port(0),
-                  state_estimator->get_input_port(0));
+    builder.Connect(cassie_output_receiver->get_output_port(0),
+                    state_estimator->get_input_port(0));
 
-  // Create and connect RobotOutput publisher.
-  auto robot_output_sender =
-      builder.AddSystem<systems::RobotOutputSender>(plant_ctrl, true);
+    // Create and connect RobotOutput publisher.
+    robot_output_sender =
+        builder.AddSystem<systems::RobotOutputSender>(plant_ctrl, true);
 
-  //  // Create and connect contact estimation publisher.
-  //  auto contact_pub =
-  //      builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_contact>(
-  //          "CASSIE_CONTACT_DISPATCHER", &lcm_local, 1.0 /
-  //          FLAGS_publish_rate));
-  //  builder.Connect(state_estimator->get_contact_output_port(),
-  //                  contact_pub->get_input_port());
-  //  // Create and connect contact estimation publisher.
-  //  auto filtered_contact_pub =
-  //      builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_contact>(
-  //          "CASSIE_FILTERED_CONTACT_DISPATCHER", &lcm_local,
-  //          1.0 / FLAGS_publish_rate));
-  //  auto gm_contact_pub = builder.AddSystem(
-  //      LcmPublisherSystem::Make<drake::lcmt_contact_results_for_viz>(
-  //          "CASSIE_GM_CONTACT_DISPATCHER", &lcm_local, 1.0 /
-  //          FLAGS_publish_rate));
-  //  builder.Connect(state_estimator->get_filtered_contact_output_port(),
-  //                  filtered_contact_pub->get_input_port());
-  //  builder.Connect(state_estimator->get_gm_contact_output_port(),
-  //                  gm_contact_pub->get_input_port());
+    //  // Create and connect contact estimation publisher.
+    //  auto contact_pub =
+    //      builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_contact>(
+    //          "CASSIE_CONTACT_DISPATCHER", &lcm_local, 1.0 /
+    //          FLAGS_publish_rate));
+    //  builder.Connect(state_estimator->get_contact_output_port(),
+    //                  contact_pub->get_input_port());
+    //  // Create and connect contact estimation publisher.
+    //  auto filtered_contact_pub =
+    //      builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_contact>(
+    //          "CASSIE_FILTERED_CONTACT_DISPATCHER", &lcm_local,
+    //          1.0 / FLAGS_publish_rate));
+    //  auto gm_contact_pub = builder.AddSystem(
+    //      LcmPublisherSystem::Make<drake::lcmt_contact_results_for_viz>(
+    //          "CASSIE_GM_CONTACT_DISPATCHER", &lcm_local, 1.0 /
+    //          FLAGS_publish_rate));
+    //  builder.Connect(state_estimator->get_filtered_contact_output_port(),
+    //                  filtered_contact_pub->get_input_port());
+    //  builder.Connect(state_estimator->get_gm_contact_output_port(),
+    //                  gm_contact_pub->get_input_port());
 
-  // Pass through to drop all but positions and velocities
-  auto state_passthrough = builder.AddSystem<systems::SubvectorPassThrough>(
-      state_estimator->get_robot_output_port().size(), 0,
-      robot_output_sender->get_input_port_state().size());
+    // Pass through to drop all but positions and velocities
+    auto state_passthrough = builder.AddSystem<systems::SubvectorPassThrough>(
+        state_estimator->get_robot_output_port().size(), 0,
+        robot_output_sender->get_input_port_state().size());
 
-  // Passthrough to pass efforts
-  auto effort_passthrough = builder.AddSystem<systems::SubvectorPassThrough>(
-      state_estimator->get_robot_output_port().size(),
-      robot_output_sender->get_input_port_state().size(),
-      robot_output_sender->get_input_port_effort().size());
+    // Passthrough to pass efforts
+    auto effort_passthrough = builder.AddSystem<systems::SubvectorPassThrough>(
+        state_estimator->get_robot_output_port().size(),
+        robot_output_sender->get_input_port_state().size(),
+        robot_output_sender->get_input_port_effort().size());
 
-  builder.Connect(state_estimator->get_robot_output_port(),
-                  state_passthrough->get_input_port());
-  builder.Connect(state_passthrough->get_output_port(),
-                  robot_output_sender->get_input_port_state());
+    builder.Connect(state_estimator->get_robot_output_port(),
+                    state_passthrough->get_input_port());
+    builder.Connect(state_passthrough->get_output_port(),
+                    robot_output_sender->get_input_port_state());
 
-  builder.Connect(state_estimator->get_robot_output_port(),
-                  effort_passthrough->get_input_port());
-  builder.Connect(effort_passthrough->get_output_port(),
-                  robot_output_sender->get_input_port_effort());
+    builder.Connect(state_estimator->get_robot_output_port(),
+                    effort_passthrough->get_input_port());
+    builder.Connect(effort_passthrough->get_output_port(),
+                    robot_output_sender->get_input_port_effort());
 
-  if (FLAGS_pub_state_from_dispatcher) {
-    auto state_pub_from_dispatcher =
-        builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_robot_output>(
-            "CASSIE_STATE_DISPATCHER" + suffix, &lcm_local,
-            1.0 / FLAGS_publish_rate));
-    builder.Connect(*robot_output_sender, *state_pub_from_dispatcher);
+    if (FLAGS_pub_state_from_dispatcher) {
+      auto state_pub_from_dispatcher = builder.AddSystem(
+          LcmPublisherSystem::Make<dairlib::lcmt_robot_output>(
+              "CASSIE_STATE_DISPATCHER" + suffix, &lcm_local,
+              1.0 / FLAGS_publish_rate));
+      builder.Connect(*robot_output_sender, *state_pub_from_dispatcher);
+    }
   }
 
   ////// Controller //////
