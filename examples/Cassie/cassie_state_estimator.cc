@@ -123,8 +123,8 @@ CassieStateEstimator::CassieStateEstimator(
     joint_selection_matrices.emplace_back(MatrixXd::Zero(n_v_, n_v_));
     vector<string> leg_names = {"left, right"};
     for (const auto& joint_name : velocity_idx_map_) {
-      std::cout << joint_name.first << std::endl;
-      std::cout << joint_name.second << std::endl;
+      // std::cout << joint_name.first << std::endl;
+      // std::cout << joint_name.second << std::endl;
       if (joint_name.first.find("left") != std::string::npos) {
         joint_selection_matrices[0](joint_name.second, joint_name.second) = 1;
       }
