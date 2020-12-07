@@ -13,6 +13,7 @@
 #include "examples/Cassie/networking/simple_cassie_udp_subscriber.h"
 #include "examples/Cassie/osc/heading_traj_generator.h"
 #include "examples/Cassie/osc/high_level_command.h"
+#include "examples/Cassie/osc/high_level_const_speed_command.h"
 #include "examples/Cassie/osc/walking_speed_control.h"
 #include "examples/Cassie/simulator_drift.h"
 #include "multibody/kinematic/fixed_joint_evaluator.h"
@@ -109,6 +110,7 @@ DEFINE_int32(
     "1 uses the neutral point derived from LIPM given the stance duration");
 
 // Simulation parameters.
+DEFINE_double(init_vel_y_adjustment, 0.35, "mitigate initial disturbance");
 DEFINE_bool(is_time_delay, true, "");
 DEFINE_double(target_realtime_rate, 1.0,
               "Desired rate relative to real time.  See documentation for "
@@ -176,6 +178,8 @@ DEFINE_double(k_d_swing_foot_z, 10, "");
 DEFINE_double(mid_foot_height, 0.05, "");
 
 DEFINE_double(double_support_duration, 0.02, "");
+DEFINE_double(k_fp_sagital, 0.06, "");
+DEFINE_double(k_fp_lateral, 0.12, "");
 
 DEFINE_double(knee_spring_left, 1500, "");
 DEFINE_double(knee_spring_right, 1500, "");
@@ -188,6 +192,10 @@ DEFINE_double(pelvis_disturbnace_zdot, 0, "in m/s");
 
 DEFINE_double(random_joint_damping_min, -1, "");
 DEFINE_double(random_joint_damping_max, -1, "");
+
+DEFINE_double(des_vel_sagital, 0, "in local frame");
+DEFINE_double(des_vel_lateral, 0, "in local frame");
+DEFINE_double(des_vel_ramp_time, 5.0, "in seconds");
 
 DEFINE_string(sample_id, "", "");
 DEFINE_bool(print_gains, false, "");
@@ -223,6 +231,8 @@ struct OSCWalkingGains {
   double final_foot_velocity_z;
   double lipm_height;
   double double_support_duration;
+  double k_fp_sagital;
+  double k_fp_lateral;
 
   template <typename Archive>
   void Serialize(Archive* a) {
@@ -258,6 +268,8 @@ struct OSCWalkingGains {
     a->Visit(DRAKE_NVP(lipm_height));
 
     a->Visit(DRAKE_NVP(double_support_duration));
+    a->Visit(DRAKE_NVP(k_fp_sagital));
+    a->Visit(DRAKE_NVP(k_fp_lateral));
   }
 };
 
@@ -569,6 +581,8 @@ int DoMain(int argc, char* argv[]) {
   gains.hip_yaw_kd = FLAGS_hip_yaw_kd;
   gains.mid_foot_height = FLAGS_mid_foot_height;
   gains.double_support_duration = FLAGS_double_support_duration;
+  gains.k_fp_sagital = FLAGS_k_fp_sagital;
+  gains.k_fp_lateral = FLAGS_k_fp_lateral;
   W_com(2, 2) = FLAGS_w_com_z;
   K_p_com(2, 2) = FLAGS_k_p_com_z;
   K_d_com(2, 2) = FLAGS_k_d_com_z;
@@ -606,6 +620,8 @@ int DoMain(int argc, char* argv[]) {
     std::cout << "mid_foot_height: " << gains.mid_foot_height << std::endl;
     std::cout << "double_support_duration: \n"
               << gains.double_support_duration << std::endl;
+    std::cout << "k_fp_sagital: \n" << gains.k_fp_sagital << std::endl;
+    std::cout << "k_fp_lateral: \n" << gains.k_fp_lateral << std::endl;
     std::cout << "COM W: \n" << W_com << std::endl;
     std::cout << "COM Kp: \n" << K_p_com << std::endl;
     std::cout << "COM Kd: \n" << K_d_com << std::endl;
@@ -671,28 +687,35 @@ int DoMain(int argc, char* argv[]) {
                   simulator_drift->get_input_port_state());
 
   // Create human high-level control
-  Eigen::Vector2d global_target_position(0, 0);
-  Eigen::Vector2d params_of_no_turning(5, 1);
+  //  Eigen::Vector2d global_target_position(0, 0);
+  //  Eigen::Vector2d params_of_no_turning(5, 1);
   // Logistic function 1/(1+5*exp(x-1))
   // The function ouputs 0.0007 when x = 0
   //                     0.5    when x = 1
   //                     0.9993 when x = 2
-  cassie::osc::HighLevelCommand* high_level_command;
+
+  Eigen::Vector2d des_vel(FLAGS_des_vel_sagital, FLAGS_des_vel_lateral);
+  cassie::osc::HighLevelConstSpeedCommand* high_level_command;
   if (FLAGS_use_radio) {
     //    auto cassie_out_receiver =
     //        builder.AddSystem(LcmSubscriberSystem::Make<dairlib::lcmt_cassie_out>(
     //            FLAGS_cassie_out_channel + suffix, &lcm_local));
     //    double vel_scale_rot = 0.5;
     //    double vel_scale_trans = 1.5;
-    //    high_level_command = builder.AddSystem<cassie::osc::HighLevelCommand>(
+    //    high_level_command =
+    //    builder.AddSystem<cassie::osc::HighLevelConstSpeedCommand>(
     //        plant_ctrl, context_w_spr.get(), vel_scale_rot, vel_scale_trans,
     //        FLAGS_footstep_option);
     //    builder.Connect(cassie_out_receiver->get_output_port(),
     //                    high_level_command->get_cassie_output_port());
   } else {
-    high_level_command = builder.AddSystem<cassie::osc::HighLevelCommand>(
-        plant_ctrl, context_w_spr.get(), global_target_position,
-        params_of_no_turning, FLAGS_footstep_option);
+    //    high_level_command = builder.AddSystem<cassie::osc::HighLevelCommand>(
+    //        plant_ctrl, context_w_spr.get(), global_target_position,
+    //        params_of_no_turning, FLAGS_footstep_option);
+    high_level_command =
+        builder.AddSystem<cassie::osc::HighLevelConstSpeedCommand>(
+            plant_ctrl, context_w_spr.get(), des_vel, FLAGS_des_vel_ramp_time,
+            FLAGS_footstep_option);
   }
   builder.Connect(state_receiver->get_output_port(0),
                   high_level_command->get_state_input_port());
@@ -776,12 +799,13 @@ int DoMain(int argc, char* argv[]) {
   builder.Connect(simulator_drift->get_output_port(0),
                   lipm_traj_generator->get_input_port_state());
 
+  std::vector<double> k_fp = {gains.k_fp_sagital, gains.k_fp_lateral};
   // Create velocity control by foot placement
   bool use_predicted_com_vel = true;
   auto walking_speed_control =
       builder.AddSystem<cassie::osc::WalkingSpeedControl>(
           plant_ctrl, context_w_spr.get(), FLAGS_footstep_option,
-          use_predicted_com_vel ? left_support_duration : 0);
+          use_predicted_com_vel ? left_support_duration : 0, k_fp);
   builder.Connect(high_level_command->get_xy_output_port(),
                   walking_speed_control->get_input_port_des_hor_vel());
   builder.Connect(simulator_drift->get_output_port(0),
@@ -990,7 +1014,7 @@ int DoMain(int argc, char* argv[]) {
                          &lambda_init);
   VectorXd v_init = VectorXd::Zero(plant_sim.num_velocities());
   v_init(3) = FLAGS_pelvis_disturbnace_xdot;
-  v_init(4) = FLAGS_pelvis_disturbnace_ydot;
+  v_init(4) = FLAGS_pelvis_disturbnace_ydot + FLAGS_init_vel_y_adjustment;
   v_init(5) = FLAGS_pelvis_disturbnace_zdot;
   plant_sim.SetPositions(&plant_context, q_init);
   plant_sim.SetVelocities(&plant_context, v_init);

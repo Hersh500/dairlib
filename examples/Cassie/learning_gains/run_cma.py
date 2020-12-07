@@ -94,19 +94,24 @@ def obj_func(x):
   gains[28] = x[28] * yaml_gains['SwingFootKd'][8]
   gains[29] = x[29] * yaml_gains['mid_foot_height']
   gains[30] = x[30] * yaml_gains['double_support_duration']
+  gains[31] = x[31] * yaml_gains['k_fp_sagital']
+  gains[32] = x[32] * yaml_gains['k_fp_lateral']
 
   # initialize cost
   cost = 0
-  n_trail = (1 if save_log else 10)
-  for i in range(n_trail):
-    cost = run_sim_and_eval_cost(cost, x, gains, sample_id)
-  cost /= n_trail
+  desired_velocities = ([[0.0, 0.0]] if save_log
+                        else [[0.0, 0.0], [0.6, 0.0], [0.0, 0.2], [0.0, -0.2]])
+  n_trial_domain_randomization = (1 if save_log else 10)
+  for desired_vel in desired_velocities:
+    for i in range(n_trial_domain_randomization):
+      cost = run_sim_and_eval_cost(cost, x, gains, sample_id, desired_vel)
+  cost /= (len(desired_velocities) * n_trial_domain_randomization)
 
   print("cost = " + str(cost))
   return cost
 
 
-def run_sim_and_eval_cost(cost, cma_x, gains, sample_id):
+def run_sim_and_eval_cost(cost, cma_x, gains, sample_id, desired_vel):
   publish_rate = 100.0
 
   # Randomize spring stiffness
@@ -129,6 +134,7 @@ def run_sim_and_eval_cost(cost, cma_x, gains, sample_id):
   simulation_cmd = \
     ['bazel-bin/examples/Cassie/run_sim_dispatcher_and_walking',
      '--sample_id=%s' % sample_id,
+     '--init_vel_y_adjustment=0.35',
      '--is_time_delay=true',
      '--use_dispatcher=true',
      '--end_time=%.2f' % target_end_time,
@@ -144,6 +150,8 @@ def run_sim_and_eval_cost(cost, cma_x, gains, sample_id):
      '--pelvis_disturbnace_zdot=%.2f' % pelvis_disturbance[2],
      '--random_joint_damping_min=%.2f' % joint_damping_min,
      '--random_joint_damping_max=%.2f' % joint_damping_max,
+     '--des_vel_sagital=%.2f' % desired_vel[0],
+     '--des_vel_lateral=%.2f' % desired_vel[1],
      '--w_accel=%.8f' % gains[0],
      '--w_soft_constraint=%.2f' % gains[1],
      '--w_swing_toe=%.2f' % gains[2],
@@ -175,6 +183,8 @@ def run_sim_and_eval_cost(cost, cma_x, gains, sample_id):
      '--k_d_swing_foot_z=%.2f' % gains[28],
      '--mid_foot_height=%.2f' % gains[29],
      '--double_support_duration=%.2f' % gains[30],
+     '--k_fp_sagital=%.2f' % gains[31],
+     '--k_fp_lateral=%.2f' % gains[32],
      (' | tee -a ' + dir + 'gains' if save_log else ''),
      ]
   if save_log:
@@ -318,11 +328,11 @@ def main():
 
   # Parameters for CMA
   global param_dim, popsize
-  param_dim = 31
+  param_dim = 33
   popsize = param_dim * 2
   sigma_init = 0.1
 
-  # Parameter for simulation
+  # Parameter for simulation evaluation
   global target_end_time
   target_end_time = 10.0
 
@@ -363,37 +373,39 @@ def main():
 
   # Initial guess
   x_init = param_dim * [1.0]
-  x_init[0] = 0.536
-  x_init[1] = 0.649
-  x_init[2] = 1.296
-  x_init[3] = 0.438
-  x_init[4] = 4.515
-  x_init[5] = 2.182
-  x_init[6] = 1.489
-  x_init[7] = 0.850
-  x_init[8] = 3.158
-  x_init[9] = 0.597
-  x_init[10] = 1.519
-  x_init[11] = 1.233
-  x_init[12] = 1.301
-  x_init[13] = 1.200
-  x_init[14] = 1.795
-  x_init[15] = 1.815
-  x_init[16] = 0.839
-  x_init[17] = 1.269
-  x_init[18] = 4.230
-  x_init[19] = 4.301
-  x_init[20] = 1.918
-  x_init[21] = 1.890
-  x_init[22] = 0.952
-  x_init[23] = 0.817
-  x_init[24] = 0.837
-  x_init[25] = 1.865
-  x_init[26] = 0.566
-  x_init[27] = 0.471
-  x_init[28] = 1.083
-  x_init[29] = 1.262
-  x_init[30] = 1.744
+  x_init[0] = 0.449
+  x_init[1] = 0.632
+  x_init[2] = 1.461
+  x_init[3] = 0.620
+  x_init[4] = 4.705
+  x_init[5] = 1.965
+  x_init[6] = 1.285
+  x_init[7] = 0.931
+  x_init[8] = 3.552
+  x_init[9] = 0.161
+  x_init[10] = 1.257
+  x_init[11] = 1.240
+  x_init[12] = 1.286
+  x_init[13] = 1.452
+  x_init[14] = 1.755
+  x_init[15] = 1.727
+  x_init[16] = 0.821
+  x_init[17] = 1.431
+  x_init[18] = 4.134
+  x_init[19] = 4.383
+  x_init[20] = 2.039
+  x_init[21] = 1.924
+  x_init[22] = 0.970
+  x_init[23] = 0.907
+  x_init[24] = 0.682
+  x_init[25] = 1.816
+  x_init[26] = 0.043
+  x_init[27] = 0.482
+  x_init[28] = 0.949
+  x_init[29] = 1.347
+  x_init[30] = 1.459
+  x_init[31] = 1
+  x_init[32] = 1
 
   # Construct CMA
   es = cma.CMAEvolutionStrategy(x_init, sigma_init, {'popsize': popsize})
@@ -405,17 +417,17 @@ def main():
   save_log = False
 
   # Optimize
-  es.optimize(obj_func, n_jobs=n_theads)
-  es.result_pretty()
-
-  # Save the log of the best solution
-  save_log = True
-  obj_func(es.result.xbest.tolist())
-  save_log = False
-
-  print(es.popsize)
-  print(es.opts)
-  pdb.set_trace()
+  # es.optimize(obj_func, n_jobs=n_theads)
+  # es.result_pretty()
+  #
+  # # Save the log of the best solution
+  # save_log = True
+  # obj_func(es.result.xbest.tolist())
+  # save_log = False
+  #
+  # print(es.popsize)
+  # print(es.opts)
+  # pdb.set_trace()
 
 
 if __name__ == "__main__":

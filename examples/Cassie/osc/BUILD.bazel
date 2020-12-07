@@ -7,6 +7,7 @@ cc_library(
     deps = [
         "//examples/Cassie/osc:heading_traj_generator",
         "//examples/Cassie/osc:high_level_command",
+        "//examples/Cassie/osc:high_level_const_speed_command",
         "//examples/Cassie/osc:standing_com_traj",
         "//examples/Cassie/osc:standing_pelvis_traj",
         "//examples/Cassie/osc:swing_toe_traj",
@@ -33,6 +34,19 @@ cc_library(
     name = "high_level_command",
     srcs = ["high_level_command.cc"],
     hdrs = ["high_level_command.h"],
+    deps = [
+        "//lcmtypes:lcmt_robot",
+        "//multibody:utils",
+        "//systems/controllers:control_utils",
+        "//systems/framework:vector",
+        "@drake//:drake_shared_library",
+    ],
+)
+
+cc_library(
+    name = "high_level_const_speed_command",
+    srcs = ["high_level_const_speed_command.cc"],
+    hdrs = ["high_level_const_speed_command.h"],
     deps = [
         "//lcmtypes:lcmt_robot",
         "//multibody:utils",

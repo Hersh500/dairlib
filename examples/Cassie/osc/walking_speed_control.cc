@@ -32,7 +32,8 @@ namespace osc {
 
 WalkingSpeedControl::WalkingSpeedControl(
     const drake::multibody::MultibodyPlant<double>& plant,
-    Context<double>* context, int footstep_option, double swing_phase_duration)
+    Context<double>* context, int footstep_option, double swing_phase_duration,
+    std::vector<double> k_fp)
     : plant_(plant),
       context_(context),
       world_(plant_.world_frame()),
@@ -78,6 +79,10 @@ WalkingSpeedControl::WalkingSpeedControl(
     k_fp_fb_sagital_ = 0.06;
     k_fp_ff_lateral_ = 0;
     k_fp_fb_lateral_ = 0.12;
+    if (!k_fp.empty()) {
+      k_fp_fb_sagital_ = k_fp[0];
+      k_fp_fb_lateral_ = k_fp[1];
+    }
   }
 }
 

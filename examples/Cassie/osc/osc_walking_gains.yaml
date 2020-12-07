@@ -19,6 +19,8 @@ mid_foot_height: 0.05
 lipm_height: 0.95
 
 double_support_duration: 0.02
+k_fp_sagital: 0.12
+k_fp_lateral: 0.25
 
 CoMW:
   [  0,    0,     0,
