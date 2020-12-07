@@ -50,7 +50,7 @@ import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 # TODO: can try effort dot to cost
 # TODO: add pelvis vel tracking to cost
 # TODO: time-varying gains
-# TODO: increase the sim time?
+# TODO: increase the sim time to 10s?
 
 # There doesn't seem to be an easy way to change joint damping coefficient
 # https://github.com/RobotLocomotion/drake/blob/838160f3813be33eda8ff42f424b1887076bcbdc/multibody/tree/revolute_joint.h#L121
@@ -107,7 +107,6 @@ def obj_func(x):
 
 
 def run_sim_and_eval_cost(cost, cma_x, gains, sample_id):
-  target_end_time = 5.0
   publish_rate = 100.0
 
   # Randomize spring stiffness
@@ -322,6 +321,12 @@ def main():
   param_dim = 31
   popsize = param_dim * 2
   sigma_init = 0.1
+
+  # Parameter for simulation
+  global target_end_time
+  target_end_time = 10.0
+
+  print("target_end_time = " + str(target_end_time))
 
   # Create folder
   Path(dir).mkdir(parents=True, exist_ok=True)
