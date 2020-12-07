@@ -45,12 +45,12 @@ import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 
 # TODO: swing foot is oscillating. Maybe we can add swing foot acceleration to cost?
 
-# TODO: add dispatcher to the loop
 # TODO: add more parameters to learn
 # TODO: can try effort dot to cost
-# TODO: add pelvis vel tracking to cost
 # TODO: time-varying gains
-# TODO: increase the sim time to 10s?
+# TODO: improve pelvis vel tracking cost. Handle the case of early termination
+
+# TODO: double check if we are still using COM somewhere in the controller
 
 # There doesn't seem to be an easy way to change joint damping coefficient
 # https://github.com/RobotLocomotion/drake/blob/838160f3813be33eda8ff42f424b1887076bcbdc/multibody/tree/revolute_joint.h#L121
@@ -152,6 +152,7 @@ def run_sim_and_eval_cost(cost, cma_x, gains, sample_id, desired_vel):
      '--random_joint_damping_max=%.2f' % joint_damping_max,
      '--des_vel_sagital=%.2f' % desired_vel[0],
      '--des_vel_lateral=%.2f' % desired_vel[1],
+     '--des_vel_ramp_time=%.2f' % des_vel_ramp_time,
      '--w_accel=%.8f' % gains[0],
      '--w_soft_constraint=%.2f' % gains[1],
      '--w_swing_toe=%.2f' % gains[2],
@@ -219,52 +220,56 @@ def run_sim_and_eval_cost(cost, cma_x, gains, sample_id, desired_vel):
       print("remain_time_cost: " + str(time_cost))
   else:
     # Cost cap (to prevent extreme error cost caused by falling)
-    cost_cap = 50.0
+    cost_cap = 10.0
+    cost_cap_d_gains = 20.0
+    cost_cap_pelvis_tracking = 50.0
+
+    n_timestamps = target_end_time * publish_rate
 
     # TODO: need to fix the bug in error_y quaternioin (pelvis_balance_traj and pelvis_heading_traj)
     # tracking cost
     w_vel = 0  # 1/400
     err = osc_debug['swing_ft_traj'].error_y
-    swing_ft_error_y_cost = 5 * np.sum(np.multiply(err, err))
+    swing_ft_error_y_cost = 5 * np.sum(np.multiply(err, err)) * 100 / n_timestamps
     swing_ft_error_y_cost = min(cost_cap, swing_ft_error_y_cost)
     cost += swing_ft_error_y_cost
     err = osc_debug['swing_ft_traj'].error_ydot
-    swing_ft_error_ydot_cost = 5 * w_vel * np.sum(np.multiply(err, err))
+    swing_ft_error_ydot_cost = 5 * w_vel * np.sum(np.multiply(err, err)) * 100 / n_timestamps
     swing_ft_error_ydot_cost = min(cost_cap, swing_ft_error_ydot_cost)
     cost += swing_ft_error_ydot_cost
     err = osc_debug['lipm_traj'].error_y
-    lipm_error_y_cost = np.sum(np.multiply(err[:, 2], err[:, 2]))
+    lipm_error_y_cost = np.sum(np.multiply(err[:, 2], err[:, 2])) * 100 / n_timestamps
     lipm_error_y_cost = min(cost_cap, lipm_error_y_cost)
     cost += lipm_error_y_cost
     err = osc_debug['pelvis_balance_traj'].error_y
-    pelvis_balance_error_y_cost = np.sum(np.multiply(err[:, :3], err[:, :3]))
+    pelvis_balance_error_y_cost = np.sum(np.multiply(err[:, :3], err[:, :3])) * 100 / n_timestamps
     pelvis_balance_error_y_cost = min(cost_cap, pelvis_balance_error_y_cost)
     cost += pelvis_balance_error_y_cost
     err = osc_debug['swing_toe_traj'].error_y
-    swing_toe_error_y_cost = np.sum(np.multiply(err, err))
+    swing_toe_error_y_cost = np.sum(np.multiply(err, err)) * 100 / n_timestamps
     swing_toe_error_y_cost = min(cost_cap, swing_toe_error_y_cost)
     cost += swing_toe_error_y_cost
     err = osc_debug['swing_toe_traj'].error_ydot
-    swing_toe_error_ydot_cost = w_vel * np.sum(np.multiply(err, err))
+    swing_toe_error_ydot_cost = w_vel * np.sum(np.multiply(err, err)) * 100 / n_timestamps
     swing_toe_error_ydot_cost = min(cost_cap, swing_toe_error_ydot_cost)
     cost += swing_toe_error_ydot_cost
     err = osc_debug['swing_hip_yaw_traj'].error_y
-    swing_hip_yaw_error_y_cost = np.sum(np.multiply(err, err))
+    swing_hip_yaw_error_y_cost = np.sum(np.multiply(err, err)) * 100 / n_timestamps
     swing_hip_yaw_error_y_cost = min(cost_cap, swing_hip_yaw_error_y_cost)
     cost += swing_hip_yaw_error_y_cost
     err = osc_debug['swing_hip_yaw_traj'].error_ydot
-    swing_hip_yaw_error_ydot_cost = w_vel * np.sum(np.multiply(err, err))
+    swing_hip_yaw_error_ydot_cost = w_vel * np.sum(np.multiply(err, err)) * 100 / n_timestamps
     swing_hip_yaw_error_ydot_cost = min(cost_cap, swing_hip_yaw_error_ydot_cost)
     cost += swing_hip_yaw_error_ydot_cost
     err = osc_debug['pelvis_heading_traj'].error_ydot
     pelvis_heading_error_ydot_cost = w_vel * np.sum(
-      np.multiply(err[:, 2], err[:, 2]))
+      np.multiply(err[:, 2], err[:, 2])) * 100 / n_timestamps
     pelvis_heading_error_ydot_cost = min(cost_cap,
       pelvis_heading_error_ydot_cost)
     cost += pelvis_heading_error_ydot_cost
 
     # effort cost
-    effort_cost = np.sum(np.multiply(u / 5000, u / 5000))
+    effort_cost = np.sum(np.multiply(u / 5000, u / 5000)) * 100 / n_timestamps
     effort_cost = min(cost_cap, effort_cost)
     cost += effort_cost
 
@@ -274,7 +279,7 @@ def run_sim_and_eval_cost(cost, cma_x, gains, sample_id, desired_vel):
     for name in spring_joint_names:
       vel_diff = np.diff(x[:, nq + vel_map[name]])
       vel_dot = vel_diff / t_diff
-      spring_cost += np.sum(np.multiply(vel_dot / 4000, vel_dot / 4000))
+      spring_cost += np.sum(np.multiply(vel_dot / 4000, vel_dot / 4000)) * 100 / n_timestamps
     spring_cost = min(cost_cap, spring_cost)
     cost += spring_cost
 
@@ -282,14 +287,27 @@ def run_sim_and_eval_cost(cost, cma_x, gains, sample_id, desired_vel):
     # doesn't include toe joint
     largest_d_gains = max([gains[i] for i in (7, 10, 15, 16, 19, 26, 27, 28)])
     d_gain_cost = math.exp(max(0, largest_d_gains - 10)) - 1
-    d_gain_cost = min(cost_cap, d_gain_cost)
+    d_gain_cost = min(cost_cap_d_gains, d_gain_cost)
     cost += d_gain_cost
 
     # Penalize negative weights
     most_negative_cma_x = min([cma_x[i] for i in range(param_dim)])
     negative_gain_cost = math.exp(max(0, -most_negative_cma_x)) - 1
-    negative_gain_cost = min(cost_cap, negative_gain_cost)
+    negative_gain_cost = min(cost_cap_d_gains, negative_gain_cost)
     cost += negative_gain_cost
+
+    # pelvis velocity tracking
+    w_pelvis_vel = 100.0
+    # We use velocity in global frame here although the controller tracks local vel (because it also tracks 0 pelvis yaw)
+    idx_start = int(des_vel_ramp_time * publish_rate)
+    err = x[idx_start:, nq + vel_map['base_vx']] - desired_vel[0]
+    vel_x_tracking_cost = w_pelvis_vel * np.sum(np.multiply(err, err)) / (n_timestamps - idx_start)
+    vel_x_tracking_cost = min(cost_cap_pelvis_tracking, vel_x_tracking_cost)
+    cost += vel_x_tracking_cost
+    err = x[idx_start:, nq + vel_map['base_vy']] - desired_vel[1]
+    vel_y_tracking_cost = w_pelvis_vel * np.sum(np.multiply(err, err)) / (n_timestamps - idx_start)
+    vel_y_tracking_cost = min(cost_cap_pelvis_tracking, vel_y_tracking_cost)
+    cost += vel_y_tracking_cost
 
     if save_log:
       print("Cost breakdown: ")
@@ -306,6 +324,8 @@ def run_sim_and_eval_cost(cost, cma_x, gains, sample_id, desired_vel):
       print("spring_cost: " + str(spring_cost))
       print("d_gain_cost: " + str(d_gain_cost))
       print("negative_gain_cost: " + str(negative_gain_cost))
+      print("vel_x_tracking_cost: " + str(vel_x_tracking_cost))
+      print("vel_y_tracking_cost: " + str(vel_y_tracking_cost))
 
   # Delete log file
   if save_log:
@@ -316,7 +336,7 @@ def run_sim_and_eval_cost(cost, cma_x, gains, sample_id, desired_vel):
 
 
 def remain_time_cost(time_remain):
-  return 200 + 40 * time_remain
+  return 100 + 20 * time_remain
 
 
 def main():
@@ -333,8 +353,9 @@ def main():
   sigma_init = 0.1
 
   # Parameter for simulation evaluation
-  global target_end_time
+  global target_end_time, des_vel_ramp_time
   target_end_time = 10.0
+  des_vel_ramp_time = 5.0
 
   print("target_end_time = " + str(target_end_time))
 
@@ -417,17 +438,17 @@ def main():
   save_log = False
 
   # Optimize
-  # es.optimize(obj_func, n_jobs=n_theads)
-  # es.result_pretty()
-  #
-  # # Save the log of the best solution
-  # save_log = True
-  # obj_func(es.result.xbest.tolist())
-  # save_log = False
-  #
-  # print(es.popsize)
-  # print(es.opts)
-  # pdb.set_trace()
+  es.optimize(obj_func, n_jobs=n_theads)
+  es.result_pretty()
+
+  # Save the log of the best solution
+  save_log = True
+  obj_func(es.result.xbest.tolist())
+  save_log = False
+
+  print(es.popsize)
+  print(es.opts)
+  pdb.set_trace()
 
 
 if __name__ == "__main__":

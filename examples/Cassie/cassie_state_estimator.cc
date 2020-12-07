@@ -1447,10 +1447,10 @@ void CassieStateEstimator::setInitialPelvisPose(Context<double>* context,
   state.setPosition(imu_position);
   state.setRotation(imu_rot_mat);
   filter.setState(state);
-  cout << "Set initial IMU position to \n"
-       << filter.getState().getPosition().transpose() << endl;
-  cout << "Set initial IMU rotation to \n"
-       << filter.getState().getRotation() << endl;
+  //  cout << "Set initial IMU position to \n"
+  //       << filter.getState().getPosition().transpose() << endl;
+  //  cout << "Set initial IMU rotation to \n"
+  //       << filter.getState().getRotation() << endl;
 }
 void CassieStateEstimator::setPreviousImuMeasurement(
     Context<double>* context, const VectorXd& imu_value) const {
