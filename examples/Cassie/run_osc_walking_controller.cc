@@ -108,6 +108,9 @@ struct OSCWalkingGains {
   double final_foot_height;
   double final_foot_velocity_z;
   double lipm_height;
+  double double_support_duration;
+  double k_fp_sagital;
+  double k_fp_lateral;
 
   template <typename Archive>
   void Serialize(Archive* a) {
@@ -141,6 +144,10 @@ struct OSCWalkingGains {
     a->Visit(DRAKE_NVP(final_foot_velocity_z));
     // lipm heursitics
     a->Visit(DRAKE_NVP(lipm_height));
+
+    a->Visit(DRAKE_NVP(double_support_duration));
+    a->Visit(DRAKE_NVP(k_fp_sagital));
+    a->Visit(DRAKE_NVP(k_fp_lateral));
   }
 };
 

@@ -185,10 +185,10 @@ def run_sim_and_eval_cost(cost, cma_x, gains, sample_id, desired_vel):
      '--k_d_swing_foot_x=%.2f' % gains[26],
      '--k_d_swing_foot_y=%.2f' % gains[27],
      '--k_d_swing_foot_z=%.2f' % gains[28],
-     '--mid_foot_height=%.2f' % gains[29],
-     '--double_support_duration=%.2f' % gains[30],
-     '--k_fp_sagital=%.2f' % gains[31],
-     '--k_fp_lateral=%.2f' % gains[32],
+     '--mid_foot_height=%.3f' % gains[29],
+     '--double_support_duration=%.3f' % gains[30],
+     '--k_fp_sagital=%.3f' % gains[31],
+     '--k_fp_lateral=%.3f' % gains[32],
      (' | tee -a ' + dir + 'gains' if save_log else ''),
      ]
   if save_log:
@@ -397,37 +397,37 @@ def main():
 
   # Initial guess
   x_init = param_dim * [1.0]
-  x_init[0] = 0.449
-  x_init[1] = 0.632
-  x_init[2] = 1.461
-  x_init[3] = 0.620
-  x_init[4] = 4.705
-  x_init[5] = 1.965
-  x_init[6] = 1.285
-  x_init[7] = 0.931
-  x_init[8] = 3.552
-  x_init[9] = 0.161
-  x_init[10] = 1.257
-  x_init[11] = 1.240
-  x_init[12] = 1.286
-  x_init[13] = 1.452
-  x_init[14] = 1.755
-  x_init[15] = 1.727
-  x_init[16] = 0.821
-  x_init[17] = 1.431
-  x_init[18] = 4.134
-  x_init[19] = 4.383
-  x_init[20] = 2.039
-  x_init[21] = 1.924
-  x_init[22] = 0.970
-  x_init[23] = 0.907
-  x_init[24] = 0.682
-  x_init[25] = 1.816
-  x_init[26] = 0.043
-  x_init[27] = 0.482
-  x_init[28] = 0.949
-  x_init[29] = 1.347
-  x_init[30] = 1.459
+  x_init[0] = 0.296
+  x_init[1] = 0.705
+  x_init[2] = 1.689
+  x_init[3] = 1.078
+  x_init[4] = 4.257
+  x_init[5] = 1.765
+  x_init[6] = 1.346
+  x_init[7] = 0.958
+  x_init[8] = 3.416
+  x_init[9] = 0.104
+  x_init[10] = 0.889
+  x_init[11] = 1.186
+  x_init[12] = 1.147
+  x_init[13] = 1.344
+  x_init[14] = 2.293
+  x_init[15] = 2.122
+  x_init[16] = 0.817
+  x_init[17] = 1.638
+  x_init[18] = 4.141
+  x_init[19] = 4.485
+  x_init[20] = 2.029
+  x_init[21] = 1.970
+  x_init[22] = 0.701
+  x_init[23] = 0.817
+  x_init[24] = 0.621
+  x_init[25] = 1.712
+  x_init[26] = 0.176
+  x_init[27] = 0.507
+  x_init[28] = 0.978
+  x_init[29] = 1.076
+  x_init[30] = 1.551
   x_init[31] = 1
   x_init[32] = 1
 
