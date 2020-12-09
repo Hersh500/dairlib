@@ -618,10 +618,10 @@ int DoMain(int argc, char* argv[]) {
     std::cout << "hip_yaw_kp: " << gains.hip_yaw_kp << std::endl;
     std::cout << "hip_yaw_kd: " << gains.hip_yaw_kd << std::endl;
     std::cout << "mid_foot_height: " << gains.mid_foot_height << std::endl;
-    std::cout << "double_support_duration: \n"
+    std::cout << "double_support_duration: "
               << gains.double_support_duration << std::endl;
-    std::cout << "k_fp_sagital: \n" << gains.k_fp_sagital << std::endl;
-    std::cout << "k_fp_lateral: \n" << gains.k_fp_lateral << std::endl;
+    std::cout << "k_fp_sagital: " << gains.k_fp_sagital << std::endl;
+    std::cout << "k_fp_lateral: " << gains.k_fp_lateral << std::endl;
     std::cout << "COM W: \n" << W_com << std::endl;
     std::cout << "COM Kp: \n" << K_p_com << std::endl;
     std::cout << "COM Kd: \n" << K_d_com << std::endl;

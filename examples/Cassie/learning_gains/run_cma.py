@@ -33,7 +33,6 @@ import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 # TODO: need to add a prompt in the beginning to avoid overwriting unsaved cma result
 
 # TODO: check each term of the cost and potentially save them
-# TODO: run one lcm-logger per channel name
 
 # TODO: make the termination condition looser (sigma can be 5e-3)
 
@@ -51,6 +50,10 @@ import pydairlib.analysis_scripts.process_lcm_log as process_lcm_log
 # TODO: improve pelvis vel tracking cost. Handle the case of early termination
 
 # TODO: double check if we are still using COM somewhere in the controller
+
+# TODO: Not enough disk space. You need to run one lcm-logger per channel name (specify the channel name each logger listens to)
+# TODO: We might saturate the SSD read/write bandwith or the ethernet bandwith. One solution is to create a leafsystem with periodic update and compute all the cost in this leafsystem, and only saves cost to file
+#  We only use lcm-logger when saving for plotting (e.g. the first and last iteration)
 
 # There doesn't seem to be an easy way to change joint damping coefficient
 # https://github.com/RobotLocomotion/drake/blob/838160f3813be33eda8ff42f424b1887076bcbdc/multibody/tree/revolute_joint.h#L121
