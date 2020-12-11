@@ -1,0 +1,75 @@
+rows: 3
+cols: 3
+w_accel: 0.00000035
+w_soft_constraint: 5400
+
+w_swing_toe: 173
+swing_toe_kp: 20.92
+swing_toe_kd: 64.59
+
+w_hip_yaw: 171
+hip_yaw_kp: 136.6
+hip_yaw_kd: 9.6
+
+footstep_offset: 0.06
+center_line_offset: 0.10
+final_foot_height: 0
+final_foot_velocity_z: 0.0
+mid_foot_height: 0.054
+lipm_height: 0.95
+
+double_support_duration: 0.033
+k_fp_sagital: 0.12
+k_fp_lateral: 0.25
+
+CoMW:
+  [  0,    0,     0,
+     0,   0,     0,
+     0,    0,  3417]
+CoMKp:
+  [   0,    0,     0,
+      0,    0,     0,
+      0,    0,    5.05]
+CoMKd:
+  [   0,    0,     0,
+      0,    0,     0,
+      0,    0,    4.69]
+
+PelvisBalanceW:
+  [ 239.2,    0,     0,
+    0,    436.4,     0,
+    0,      0,     0]
+PelvisBalanceKp:
+  [ 27.62,      0,    0,
+    0,    221.7,    0,
+    0,      0,    0]
+PelvisBalanceKd:
+  [  4.19,     0,    0,
+     0,    8.77,    0,
+     0,     0,    0]
+
+PelvisHeadingW:
+  [   0,    0,     0,
+      0,    0,     0,
+      0,    0,    16.92]
+PelvisHeadingKp:
+  [   0,     0,    0,
+      0,     0,    0,
+      0,     0,   40.77]
+PelvisHeadingKd:
+  [   0,     0,    0,
+      0,     0,    0,
+      0,     0,    8.96]
+
+SwingFootW:
+  [ 799.2,    0,     0,
+    0,  784,     0,
+    0,    0,   283.2]
+SwingFootKp:
+  [ 165,    0,     0,
+    0,  248.4,     0,
+    0,    0,   691.6]
+SwingFootKd:
+  [   1.67,    0,     0,
+      0,    4.08,     0,
+      0,    0,     9.87]
