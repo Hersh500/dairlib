@@ -561,6 +561,18 @@ cc_library(
 )
 
 py_binary(
+    name = "state_receiver_py",
+    srcs = ["state_receiver.py"],
+    data = [
+        "@lcm//:lcm-python",
+    ],
+    main = "state_receiver.py",
+    deps = [
+        "//lcmtypes:lcmtypes_robot_py",
+    ],
+)
+
+py_binary(
     name = "cassie_virtual_remote_py",
     srcs = ["cassie_virtual_remote.py"],
     data = [
