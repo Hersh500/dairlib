@@ -1,6 +1,7 @@
 # https://lcm-proj.github.io/tut_python.html
 import lcm
 from dairlib import lcmt_robot_output
+<<<<<<< HEAD
 import subprocess as sp
 
 bin_dir = "/home/hersh/Programming/dairlib/bazel-bin/examples/Cassie/"
@@ -17,9 +18,10 @@ def handler(channel, data):
         print("timestamp = %s" % str(msg.position_names))
         counter = 1
 
-lc = lcm.LCM()
-sub = lc.subscribe("CASSIE_STATE_SIMULATION", handler)
-
+def handler(channel, data):
+    msg = lcmt_robot_output.decode(data)
+    print("Received message!")
+    print("timestamp = %s" % str(msg.utime))
 
 def main():
     ctrlr = sp.Popen([bin_dir + controller_p, "--height=0.9"])
