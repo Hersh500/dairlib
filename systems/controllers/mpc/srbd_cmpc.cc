@@ -1,14 +1,9 @@
-//
-// Created by brian on 3/8/21.
-//
-
 #include "srbd_cmpc.h"
 #include "common/file_utils.h"
 #include <numeric>
 
 using drake::multibody::JacobianWrtVariable;
 using drake::multibody::BodyFrame;
-
 using drake::systems::Context;
 using drake::systems::BasicVector;
 using drake::systems::EventStatus;
@@ -18,6 +13,7 @@ using drake::AbstractValue;
 using drake::EigenPtr;
 
 using drake::solvers::Solve;
+using drake::solvers::OsqpSolver;
 using drake::solvers::OsqpSolverDetails;
 using drake::solvers::MathematicalProgram;
 using drake::solvers::MathematicalProgramResult;
@@ -124,19 +120,20 @@ void SrbdCMPC::Build() {
   MakeFrictionConeConstraints();
   MakeKinematicReachabilityConstraints();
   MakeInitialStateConstraint();
-//  MakeTerrainConstraints();
+  MakeTerrainConstraints();
   MakeCost();
 
-//  drake::solvers::SolverOptions solver_options;
-//  solver_options.SetOption(OsqpSolver::id(), "verbose", 0);
-//  solver_options.SetOption(OsqpSolver::id(), "eps_abs", 1e-7);
-//  solver_options.SetOption(OsqpSolver::id(), "eps_rel", 1e-7);
-//  solver_options.SetOption(OsqpSolver::id(), "eps_prim_inf", 1e-5);
-//  solver_options.SetOption(OsqpSolver::id(), "eps_dual_inf", 1e-5);
-//  solver_options.SetOption(OsqpSolver::id(), "polish", 1);
+  drake::solvers::SolverOptions solver_options;
+  solver_options.SetOption(OsqpSolver::id(), "verbose", 0);
+  solver_options.SetOption(OsqpSolver::id(), "eps_abs", 5e-5);
+  solver_options.SetOption(OsqpSolver::id(), "eps_rel", 1e-4);
+//  solver_options.SetOption(OsqpSolver::id(), "eps_prim_inf", 1e-4);
+//  solver_options.SetOption(OsqpSolver::id(), "eps_dual_inf", 1e-4);
+  solver_options.SetOption(OsqpSolver::id(), "polish", 1);
 //  solver_options.SetOption(OsqpSolver::id(), "scaled_termination", 1);
-//  solver_options.SetOption(OsqpSolver::id(), "adaptive_rho_fraction", 1);
-//  prog_.SetSolverOptions(solver_options);
+//  solver_options.SetOption(OsqpSolver::id(), "adaptive_rho_fraction", 1.0);
+  solver_options.SetOption(OsqpSolver::id(), "max_iter", 15000);
+  prog_.SetSolverOptions(solver_options);
 }
 
 void SrbdCMPC::MakeTerrainConstraints(
@@ -230,16 +227,13 @@ void SrbdCMPC::UpdateDynamicsConstraints(const Eigen::VectorXd& x,
     beq = VectorXd::Zero(nx_);
     CopyDiscreteDynamicsConstraint(modes_.at(1-fsm_state),
         false, pos, &Aeq, &beq);
-    std::cout << "size: " << std::to_string(dynamics_.size()) << std::endl;
-    std::cout << "constraint: " << dynamics_[dynamics_.size() -1].to_string() << std::endl;
     prog_.RemoveConstraint(dynamics_[dynamics_.size()-1]);
-    std::cout << "removed" << std::endl;
     dynamics_.back() = prog_.AddLinearEqualityConstraint(
         Aeq, beq,
         {xx.at(total_knots_-1), pp.at(1-fsm_state),
          uu.at(total_knots_-1), xx.at(total_knots_)});
   } else {
-    int idx = n_until_next_stance-1;
+    int idx = n_until_next_stance;
     MatrixXd Aeq = MatrixXd::Zero(nx_, 2*nx_ + kLinearDim_ + nu_);
     VectorXd beq = VectorXd::Zero(nx_);
     CopyDiscreteDynamicsConstraint(modes_.at(1-fsm_state), false, pos, &Aeq, &beq);
@@ -260,7 +254,7 @@ void SrbdCMPC::MakeInitialStateConstraint() {
   initial_state_ = prog_.AddLinearEqualityConstraint(
               MatrixXd::Identity(nx_, nx_),
               VectorXd::Zero(nx_),
-              xx.front()).evaluator().get();
+              xx.at(0)).evaluator().get();
 }
 
 void SrbdCMPC::MakeKinematicReachabilityConstraints() {
@@ -381,16 +375,9 @@ EventStatus SrbdCMPC::PeriodicUpdate(
   } else {
     UpdateConstraints(plant_.CalcSRBStateFromPlantState(x), 0, 0);
   }
-  result_ = drake::solvers::Solve(prog_);
-  std::cout << "result: " << result_.get_solution_result() << std::endl;
 
-  if (!result_.is_success()) {
-//    std::vector<drake::solvers::Constraint*> constraints;
-//    for(const auto& constraint : result_.GetInfeasibleConstraints(prog_)){
-//     constraints.push_back(constraint.evaluator().get());
-//    }
-//    print_constraint(constraints);
-  }
+  result_ = solver_.Solve(prog_);
+  std::cout << "result: " << result_.get_solution_result() << std::endl;
 
   most_recent_sol_ = MakeLcmTrajFromSol(
       result_, timestamp, time_since_last_event,  x, fsm_state);
@@ -407,8 +394,8 @@ void SrbdCMPC::UpdateTrackingObjective(const VectorXd& xdes) const {
 void SrbdCMPC::UpdateConstraints(
     const VectorXd& x0, const int fsm_state,
     const double t_since_last_switch) const {
-
   initial_state_->UpdateCoefficients(MatrixXd::Identity(nx_, nx_), x0);
+
   if (!use_fsm_) { return; }
 
   int n_until_next_state = (dt_ * modes_.at(fsm_state).N - t_since_last_switch) / dt_;
@@ -447,6 +434,7 @@ lcmt_saved_traj SrbdCMPC::MakeLcmTrajFromSol(
   MatrixXd com = MatrixXd::Zero(2*kLinearDim_ , total_knots_);
   MatrixXd orientation = MatrixXd::Zero(2*kAngularDim_ , total_knots_);
   VectorXd time_knots = VectorXd::Zero(total_knots_);
+
 
 
   for (int i = 0; i < total_knots_; i++) {
@@ -491,8 +479,8 @@ MatrixXd SrbdCMPC::CalcSwingFootKnotPoints(const VectorXd& x,
   Vector3d next_pos =
       result.GetSolution(pp.at(1-fsm_state));
 
-  Vector3d mid_pos = swing_ft_ht_* Vector3d(0, 0, 1) *
-      (t - pow(t, 2));
+  Vector3d mid_pos = 0.5 * (curr_pos + next_pos);
+  mid_pos(2) = swing_ft_ht_ * (t - pow(t, 2));
 
   Matrix3d knots;
   knots << curr_pos, mid_pos, next_pos;
