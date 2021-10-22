@@ -56,9 +56,8 @@ class CassieEnv_test(gym.Env):
         # receives and handles the robot state
         def state_handler(channel, data):
             msg = lcmt_robot_output.decode(data)
-            print("Received message!")
-            print("timestamp = %s" % str(msg.position_names))
-            self.state_queue.put(msg_decoded)
+            state = list(msg.position) + list(msg.velocity)
+            self.state_queue.put(state)
 
         self.done = False
 
@@ -68,7 +67,20 @@ class CassieEnv_test(gym.Env):
         self.kd_default = [i for i in [1,1,1,1,1,1,2,2,1,1]]
 
         self.height_des = 0.8
-        self.joint_map = None
+        self.pos_names = ['base_qw', 'base_qx', 'base_qy', 'base_qz', 'base_x', 'base_y', 'base_z', 'hip_roll_left', 'hip_roll_right', 'hip_yaw_left', 'hip_yaw_right', 'hip_pitch_left', 'hip_pitch_right', 'knee_left', 'knee_right', 'knee_joint_left', 'knee_joint_right', 'ankle_joint_left', 'ankle_joint_right', 'ankle_spring_joint_left', 'toe_left', 'ankle_spring_joint_right', 'toe_right']
+
+        self.joint_names = [
+            "hip_roll_left_motor",
+            "hip_roll_right_motor",
+            "hip_yaw_left_motor",
+            "hip_yaw_right_motor",
+            "hip_pitch_left_motor",
+            "hip_pitch_right_motor",
+            "knee_left_motor",
+            "knee_right_motor",
+            "toe_left_motor",
+            "toe_right_motor"]
+
         return
 
 
@@ -87,6 +99,7 @@ class CassieEnv_test(gym.Env):
         action_msg.kp = self.default_kd
 
         # send LCM message with the desired action
+        # TODO: do I need to send this multiple times? OR is it ZOH'd in drake/the ctrlr?
         self.lcm.publish(self.action_channel, action_msg.encode())
 
         # wait and get the last LCM message with the desired robot state
@@ -104,10 +117,8 @@ class CassieEnv_test(gym.Env):
         else:
             self.done = False
             # really simple reward for now
-            # TODO: build the joint map
-            reward = -np.abs(self.height_des - state[self.joint_map["pelvis_z"]])
+            reward = -np.abs(self.height_des - self.state[self.pos_names.index("pelvis_z")])
 
-        # compute the reward from the state
         return self.state, reward, self.done
 
 
@@ -120,7 +131,6 @@ class CassieEnv_test(gym.Env):
         init_height = np.random.rand() * 0.4 + 0.5  # range of [0.5, 0.9)
         self.sim = sp.Popen([bin_dir + simulation_p, "--init-height=" + str(init_height)])
 
-        # can pass in terrain_des if you want to evaluate
         # wait until we receive a state from the simulation to start doing stuff.
         print("resetting and waiting for new state...")
         self.state = self.state_queue.get(block=True)
