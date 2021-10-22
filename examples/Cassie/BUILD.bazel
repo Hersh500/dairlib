@@ -223,6 +223,22 @@ cc_binary(
 )
 
 cc_binary(
+    name = "rl_multibody_sim",
+    srcs = ["test_multibody_sim.cc"],
+    deps = [
+        ":cassie_encoder",
+        ":cassie_fixed_point_solver",
+        ":cassie_urdf",
+        ":cassie_utils",
+        "//systems:robot_lcm_systems",
+        "//systems/framework:lcm_driven_loop",
+        "//systems/primitives",
+        "@drake//:drake_shared_library",
+        "@gflags",
+    ],
+)
+
+cc_binary(
     name = "multibody_sim",
     srcs = ["multibody_sim.cc"],
     deps = [
@@ -561,12 +577,12 @@ cc_library(
 )
 
 py_binary(
-    name = "state_receiver_py",
-    srcs = ["state_receiver.py"],
+    name = "cassie_pd_env",
+    srcs = ["cassie_pd_env.py"],
     data = [
         "@lcm//:lcm-python",
     ],
-    main = "state_receiver.py",
+    main = "cassie_pd_env.py",
     deps = [
         "//lcmtypes:lcmtypes_robot_py",
     ],

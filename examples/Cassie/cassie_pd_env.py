@@ -43,7 +43,7 @@ class CassieEnv_test(gym.Env):
 
         # set the terrain (TODO: is it fully randomized every time?)
         # spawn the controller, and keep track of the pid
-        self.ctrlr = sp.Popen([bin_dir + controller_p, "--height=0.9"])
+        self.ctrlr = sp.Popen([bin_dir + controller_p, "--channel_x=CASSIE_STATE_SIMULATION"])
         # spawn the simulation, and keep track of the pid (to kill to reset the sim)
         self.sim = None
 
@@ -61,6 +61,14 @@ class CassieEnv_test(gym.Env):
             self.state_queue.put(msg_decoded)
 
         self.done = False
+
+        # for now just fix these...
+        self.joint_default = [-0.01,.01,0,0,0.55,0.55,-1.5,-1.5,-1.8,-1.8]
+        self.kp_default = [i for i in [80,80,50,50,50,50,50,50,10,10]]
+        self.kd_default = [i for i in [1,1,1,1,1,1,2,2,1,1]]
+
+        self.height_des = 0.8
+        self.joint_map = None
         return
 
 
@@ -68,17 +76,36 @@ class CassieEnv_test(gym.Env):
     def step(self, action):
         # see examples/director_scripts/pd_panel.py
         action_msg = lcmt_pd_config()
+
         # massage the action into the desired output message form
+        action_msg.num_joints = len(self.joint_default)
+        action_msg.joint_names = self.joint_names
+        action_msg.desired_velocity = [0] * action_msg.num_joints
+        action_msg.desired_position = action
+        action_msg.timestamp = int(time.time() * 1e6)
+        action_msg.kp = self.default_kp
+        action_msg.kp = self.default_kd
 
         # send LCM message with the desired action
         self.lcm.publish(self.action_channel, action_msg.encode())
+
         # wait and get the last LCM message with the desired robot state
         time.sleep(1/self.rate)
+
         # get the next LCM message in the queue
         self.state = self.state_queue.get(block=True)
-        # check based on self.state
-        if some_bad_condition:
+
+        # check on self.state (maybe say failure is CoM height below a threshold = falling?)
+        if self.state[self.joint_map["pelvis_z"]] < 0.4:
             self.done = True
+            self.sim.terminate()
+            self.sim = None
+            reward = 0
+        else:
+            self.done = False
+            # really simple reward for now
+            # TODO: build the joint map
+            reward = -np.abs(self.height_des - state[self.joint_map["pelvis_z"]])
 
         # compute the reward from the state
         return self.state, reward, self.done
@@ -90,7 +117,9 @@ class CassieEnv_test(gym.Env):
         if self.sim is not None:
             self.sim.terminate()
         # pick a new initial condition, set that as our state
-        self.sim = sp.Popen([bin_dir + simulation_p, "--init-height=0.9"])
+        init_height = np.random.rand() * 0.4 + 0.5  # range of [0.5, 0.9)
+        self.sim = sp.Popen([bin_dir + simulation_p, "--init-height=" + str(init_height)])
+
         # can pass in terrain_des if you want to evaluate
         # wait until we receive a state from the simulation to start doing stuff.
         print("resetting and waiting for new state...")
