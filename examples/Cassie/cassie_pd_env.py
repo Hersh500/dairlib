@@ -39,9 +39,7 @@ def main():
 class CassieEnv_test(gym.Env):
     def __init__(self, action_channel, state_channel, rate):
         super(CassieEnv, self).__init__()
-        # precompute random initial conditions for domain randomization
 
-        # set the terrain (TODO: is it fully randomized every time?)
         # spawn the controller, and keep track of the pid
         self.ctrlr = sp.Popen([bin_dir + controller_p, "--channel_x=CASSIE_STATE_SIMULATION"])
         # spawn the simulation, and keep track of the pid (to kill to reset the sim)
@@ -84,7 +82,6 @@ class CassieEnv_test(gym.Env):
         return
 
 
-    # Need to have some nominal gains for PD
     def step(self, action):
         # see examples/director_scripts/pd_panel.py
         action_msg = lcmt_pd_config()
