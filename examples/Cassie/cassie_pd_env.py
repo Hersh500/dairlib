@@ -4,11 +4,8 @@ from dairlib import lcmt_robot_output, lcmt_pd_config
 import subprocess as sp
 import gym
 import queue
+import numpy as np
 
-# Assuming running from dairlib/
-bin_dir = "./bazel-bin/examples/Cassie/"
-controller_p = "run_osc_standing_controller" 
-simulation_p = "multibody_sim"
 
 counter = 1
 def handler(channel, data):
@@ -23,27 +20,20 @@ def handler(channel, data):
 lc = lcm.LCM()
 sub = lc.subscribe("CASSIE_STATE_SIMULATION", handler)
 
-def main():
-    ctrlr = sp.Popen([bin_dir + controller_p, "--height=0.9"])
-    sim = sp.Popen([bin_dir + simulation_p, "--init-height=0.9"])
-
-    try:
-        while True:
-            lc.handle()
-    except KeyboardInterrupt:
-        ctrlr.terminate()
-        sim.terminate()
-        pass
-
-
 class CassieEnv_test(gym.Env):
     def __init__(self, action_channel, state_channel, rate):
-        super(CassieEnv, self).__init__()
+        super(CassieEnv_test, self).__init__()
 
         # spawn the controller, and keep track of the pid
-        self.ctrlr = sp.Popen([bin_dir + controller_p, "--channel_x=CASSIE_STATE_SIMULATION"])
+        self.ctrlr = None
         # spawn the simulation, and keep track of the pid (to kill to reset the sim)
         self.sim = None
+
+        # receives and handles the robot state
+        def state_handler(channel, data):
+            msg = lcmt_robot_output.decode(data)
+            state = list(msg.position) + list(msg.velocity)
+            self.state_queue.put(state)
 
         lc = lcm.LCM()
         sub = lc.subscribe(state_channel, state_handler)
@@ -51,11 +41,6 @@ class CassieEnv_test(gym.Env):
         self.action_channel = action_channel
         self.rate = rate
 
-        # receives and handles the robot state
-        def state_handler(channel, data):
-            msg = lcmt_robot_output.decode(data)
-            state = list(msg.position) + list(msg.velocity)
-            self.state_queue.put(state)
 
         self.done = False
 
@@ -79,6 +64,10 @@ class CassieEnv_test(gym.Env):
             "toe_left_motor",
             "toe_right_motor"]
 
+        # Assuming running from dairlib/
+        self.bin_dir = "./bazel-bin/examples/Cassie/"
+        self.controller_p = "run_osc_standing_controller" 
+        self.simulation_p = "multibody_sim"
         return
 
 
@@ -123,14 +112,25 @@ class CassieEnv_test(gym.Env):
         # kill the simulation (reset the controller)
         if self.sim is not None:
             self.sim.terminate()
+        if self.ctrlr is not None:
+            self.ctrlr.terminate()
+
         # pick a new initial condition, set that as our state
         init_height = np.random.rand() * 0.4 + 0.5  # range of [0.5, 0.9)
-        self.sim = sp.Popen([bin_dir + simulation_p, "--init-height=" + str(init_height)])
+        self.ctrlr = sp.Popen([self.bin_dir + self.controller_p, "--channel_x=CASSIE_STATE_SIMULATION"])
+        self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--init-height=" + str(init_height)])
 
+        # TODO: do I need to send a nominal action message so the robot doesn't fall over?
         # wait until we receive a state from the simulation to start doing stuff.
         print("resetting and waiting for new state...")
         self.state = self.state_queue.get(block=True)
         return self.state
+
+
+def main():
+    env = CassieEnv_test("PD_CONFIG", "CASSIE_STATE_SIMULATION", 200)
+    s = env.reset()
+    print(s)
 
 
 if __name__ == "__main__":
