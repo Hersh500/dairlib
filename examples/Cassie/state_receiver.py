@@ -13,14 +13,14 @@ def handler(channel, data):
     if counter % 1000 == 0:
         msg = lcmt_robot_output.decode(data)
         print("Received message!")
-        print("timestamp = %s" % str(msg.position_names))
+        print("efforts = ", str(msg.effort))
         counter = 1
 
 lc = lcm.LCM()
 sub = lc.subscribe("CASSIE_STATE_SIMULATION", handler)
 
-ctrlr = sp.Popen([bin_dir + controller_p, "--height=0.9"])
-sim = sp.Popen([bin_dir + simulation_p, "--init-height=0.9"])
+# ctrlr = sp.Popen([bin_dir + controller_p, "--height=0.9"])
+# sim = sp.Popen([bin_dir + simulation_p, "--init-height=0.9"])
 
 try:
     while True:

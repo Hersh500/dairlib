@@ -156,8 +156,7 @@ class CassieEnv_test(gym.Env):
 def main():
     env = CassieEnv_test("PD_CONFIG", "CASSIE_STATE_SIMULATION", 200)
     s = env.reset()
-    print(s)
-    time.sleep(5)
+    time.sleep(10)
     env.kill_procs()
 
 if __name__ == "__main__":
