@@ -224,7 +224,7 @@ cc_binary(
 
 cc_binary(
     name = "rl_multibody_sim",
-    srcs = ["test_multibody_sim.cc"],
+    srcs = ["rl_multibody_sim.cc"],
     deps = [
         ":cassie_encoder",
         ":cassie_fixed_point_solver",

@@ -5,21 +5,10 @@ import subprocess as sp
 import gym
 import queue
 import numpy as np
+import time
+import csv
 
-
-counter = 1
-def handler(channel, data):
-    global counter
-    counter += 1
-    if counter % 1000 == 0:
-        msg = lcmt_robot_output.decode(data)
-        print("Received message!")
-        print("timestamp = %s" % str(msg.position_names))
-        counter = 1
-
-lc = lcm.LCM()
-sub = lc.subscribe("CASSIE_STATE_SIMULATION", handler)
-
+    
 class CassieEnv_test(gym.Env):
     def __init__(self, action_channel, state_channel, rate):
         super(CassieEnv_test, self).__init__()
@@ -29,22 +18,16 @@ class CassieEnv_test(gym.Env):
         # spawn the simulation, and keep track of the pid (to kill to reset the sim)
         self.sim = None
 
-        # receives and handles the robot state
-        def state_handler(channel, data):
-            msg = lcmt_robot_output.decode(data)
-            state = list(msg.position) + list(msg.velocity)
-            self.state_queue.put(state)
-
-        lc = lcm.LCM()
-        sub = lc.subscribe(state_channel, state_handler)
+        self.lc = lcm.LCM()
+        self.sub = self.lc.subscribe(state_channel, self.state_handler)
         self.state_queue = queue.LifoQueue()
         self.action_channel = action_channel
+        self.state_channel = state_channel
         self.rate = rate
 
-
         self.done = False
-
         # for now just fix these...
+        # are these gains fucked? robot keeps falling over...
         self.joint_default = [-0.01,.01,0,0,0.55,0.55,-1.5,-1.5,-1.8,-1.8]
         self.kp_default = [i for i in [80,80,50,50,50,50,50,50,10,10]]
         self.kd_default = [i for i in [1,1,1,1,1,1,2,2,1,1]]
@@ -64,11 +47,29 @@ class CassieEnv_test(gym.Env):
             "toe_left_motor",
             "toe_right_motor"]
 
+        self.joints_in_pos_array = [7, 8, 9, 10, 11, 12, 13, 14, 20, 22]
+
         # Assuming running from dairlib/
         self.bin_dir = "./bazel-bin/examples/Cassie/"
-        self.controller_p = "run_osc_standing_controller" 
-        self.simulation_p = "multibody_sim"
+        self.controller_p = "run_pd_controller"
+        # self.controller_p = "run_osc_standing_controller"
+        self.simulation_p = "rl_multibody_sim"
+
+        # get grid of all initial conditions
+        self.all_ics = []
+        with open("./examples/Cassie/cassie_initial_conditions.csv") as csvfile:
+            reader = csv.reader(csvfile, delimiter = ",")
+            for row in reader:
+                self.all_ics.append([float(num) for num in row])
+        self.all_ics = np.array(self.all_ics)
         return
+
+
+    # receives and handles the robot state
+    def state_handler(self, channel, data):
+        msg = lcmt_robot_output.decode(data)
+        state = list(msg.position) + list(msg.velocity)
+        self.state_queue.put(state)
 
 
     def step(self, action):
@@ -81,14 +82,17 @@ class CassieEnv_test(gym.Env):
         action_msg.desired_velocity = [0] * action_msg.num_joints
         action_msg.desired_position = action
         action_msg.timestamp = int(time.time() * 1e6)
-        action_msg.kp = self.default_kp
-        action_msg.kp = self.default_kd
+        action_msg.kp = self.kp_default
+        action_msg.kd = self.kd_default
 
         # send LCM message with the desired action
         self.lcm.publish(self.action_channel, action_msg.encode())
 
         # wait and get the last LCM message with the desired robot state
         time.sleep(1/self.rate)
+
+        while self.state_queue.qsize() < 1:
+            self.lc.handle()
 
         # get the next LCM message in the queue
         self.state = self.state_queue.get(block=True)
@@ -110,28 +114,51 @@ class CassieEnv_test(gym.Env):
     def reset(self, terrain_des = None):
         # clear the state queue
         # kill the simulation (reset the controller)
+        self.kill_procs()
+
+        # pick a new initial condition, set that as our state
+        ic_idx = np.random.randint(0, self.all_ics.shape[1])
+        print("using ic", ic_idx)
+        ic = self.all_ics[:,ic_idx]
+        
+        # init_height = np.random.rand() * 0.3 + 0.6  # range of [0.6, 0.9)
+        self.ctrlr = sp.Popen([self.bin_dir + self.controller_p, "--channel_x=" + self.state_channel])
+        self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--ic_idx=" + str(ic_idx)])
+        # self.sim = sp.Popen([self.bin_dir + self.simulation_p])
+
+        # TODO: do I need to send a nominal action message so the robot doesn't fall over?
+        # wait until we receive a state from the simulation to start doing stuff.
+        while self.state_queue.qsize() < 1:
+            self.lc.handle()
+        self.state = self.state_queue.get(block=True)
+
+        print("publishing nominal joint state")
+        action_msg = lcmt_pd_config()
+        action_msg.num_joints = len(self.joint_default)
+        action_msg.joint_names = self.joint_names
+        action_msg.desired_velocity = [0] * action_msg.num_joints
+        action_msg.desired_position = ic[self.joints_in_pos_array]
+        action_msg.timestamp = int(time.time() * 1e6)
+        action_msg.kp = self.kp_default
+        action_msg.kd = self.kd_default
+        self.lc.publish(self.action_channel, action_msg.encode())
+        
+        return self.state
+
+
+    def kill_procs(self):
         if self.sim is not None:
             self.sim.terminate()
         if self.ctrlr is not None:
             self.ctrlr.terminate()
-
-        # pick a new initial condition, set that as our state
-        init_height = np.random.rand() * 0.4 + 0.5  # range of [0.5, 0.9)
-        self.ctrlr = sp.Popen([self.bin_dir + self.controller_p, "--channel_x=CASSIE_STATE_SIMULATION"])
-        self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--init-height=" + str(init_height)])
-
-        # TODO: do I need to send a nominal action message so the robot doesn't fall over?
-        # wait until we receive a state from the simulation to start doing stuff.
-        print("resetting and waiting for new state...")
-        self.state = self.state_queue.get(block=True)
-        return self.state
-
+        
 
 def main():
     env = CassieEnv_test("PD_CONFIG", "CASSIE_STATE_SIMULATION", 200)
     s = env.reset()
     print(s)
-
+    time.sleep(5)
+    env.kill_procs()
 
 if __name__ == "__main__":
     main()
