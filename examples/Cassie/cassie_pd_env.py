@@ -102,7 +102,6 @@ class CassieEnv_test(gym.Env):
         action_msg.kp = self.default_kd
 
         # send LCM message with the desired action
-        # TODO: do I need to send this multiple times? OR is it ZOH'd in drake/the ctrlr?
         self.lcm.publish(self.action_channel, action_msg.encode())
 
         # wait and get the last LCM message with the desired robot state
