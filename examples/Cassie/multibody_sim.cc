@@ -1,4 +1,5 @@
 #include <memory>
+#include <stdio.h>
 
 #include <drake/systems/primitives/discrete_time_delay.h>
 #include <drake/systems/primitives/multiplexer.h>
@@ -214,7 +215,7 @@ int do_main(int argc, char* argv[]) {
     multibody::MakePlantApproximateRigidBody(&plant_context, plant,
                                              "pelvis", links, com_offset, I_rot, mass, 0.02);
   }
-
+  std::printf("q_init size: %ld\n", q_init.size());
   plant.SetPositions(&plant_context, q_init);
   plant.SetVelocities(&plant_context, VectorXd::Zero(plant.num_velocities()));
 

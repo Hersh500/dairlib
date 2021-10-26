@@ -589,6 +589,18 @@ py_binary(
 )
 
 py_binary(
+    name = "cassie_joy_env",
+    srcs = ["cassie_joy_env.py"],
+    data = [
+        "@lcm//:lcm-python",
+    ],
+    main = "cassie_joy_env.py",
+    deps = [
+        "//lcmtypes:lcmtypes_robot_py",
+    ],
+)
+
+py_binary(
     name = "cassie_pd_env",
     srcs = ["cassie_pd_env.py"],
     data = [

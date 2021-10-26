@@ -1,6 +1,6 @@
 # https://lcm-proj.github.io/tut_python.html
 import lcm
-from dairlib import lcmt_robot_output, lcmt_pd_config
+from dairlib import lcmt_robot_output, lcmt_radio_out
 import subprocess as sp
 import gym
 import queue
@@ -9,9 +9,14 @@ import time
 import csv
 
     
-class CassieEnv_JointAngles(gym.Env):
+# TODO(hersh): make a more flexible environment so it's easier to slot in other
+# low level controllers and tasks
+# requires: defining your own action -> message, message -> state, state -> reward,
+# lcm message types, termination conditions... seems to be pretty annoying anyways.
+# maybe it's just a more structured way to go about things?
+class CassieEnv_Joystick(gym.Env):
     def __init__(self, action_channel, state_channel, rate):
-        super(CassieEnv_test, self).__init__()
+        super(CassieEnv_Joystick, self).__init__()
 
         # spawn the controller, and keep track of the pid
         self.ctrlr = None
@@ -26,35 +31,12 @@ class CassieEnv_JointAngles(gym.Env):
         self.rate = rate
 
         self.done = False
-        # for now just fix these...
-        # are these gains fucked? robot keeps falling over...
-        self.joint_default = [-0.01,.01,0,0,0.55,0.55,-1.5,-1.5,-1.8,-1.8]
-        self.kp_default = [80,80,50,50,50,50,50,50,10,10]
-        self.kp_default = list(np.array(self.kp_default) * 10)
-        self.kd_default = [1,1,1,1,1,1,2,2,1,1]
-        self.kd_default = list(np.array(self.kd_default) * 10)
-
-        self.height_des = 0.8
-        self.pos_names = ['base_qw', 'base_qx', 'base_qy', 'base_qz', 'base_x', 'base_y', 'base_z', 'hip_roll_left', 'hip_roll_right', 'hip_yaw_left', 'hip_yaw_right', 'hip_pitch_left', 'hip_pitch_right', 'knee_left', 'knee_right', 'knee_joint_left', 'knee_joint_right', 'ankle_joint_left', 'ankle_joint_right', 'ankle_spring_joint_left', 'toe_left', 'ankle_spring_joint_right', 'toe_right']
-
-        self.joint_names = [
-            "hip_roll_left_motor",
-            "hip_roll_right_motor",
-            "hip_yaw_left_motor",
-            "hip_yaw_right_motor",
-            "hip_pitch_left_motor",
-            "hip_pitch_right_motor",
-            "knee_left_motor",
-            "knee_right_motor",
-            "toe_left_motor",
-            "toe_right_motor"]
-
-        self.joints_in_pos_array = [7, 8, 9, 10, 11, 12, 13, 14, 20, 22]
 
         # Assuming running from dairlib/
         self.bin_dir = "./bazel-bin/examples/Cassie/"
-        self.controller_p = "run_pd_controller"
+        self.controller_p = "run_osc_walking_controller"
         self.simulation_p = "rl_multibody_sim"
+        self.ctrlr_options = "--use_radio=True --cassie_out_channel=CASSIE_OUTPUT --channel_x="+self.state_channel
 
         # get grid of all initial conditions
         self.all_ics = []
@@ -69,25 +51,18 @@ class CassieEnv_JointAngles(gym.Env):
     # receives and handles the robot state
     def state_handler(self, channel, data):
         msg = lcmt_robot_output.decode(data)
-        state = list(msg.position) + list(msg.velocity)
+        # com angle, trans. pos, ang vel, trans. vel
+        state = np.array(list(msg.position[0:7]) + list(msg.velocity[0:6]))
         self.state_queue.put(state)
 
 
-    def step(self, action):
+    def step(self, action, goal_state):
         # see examples/director_scripts/pd_panel.py
-        action_msg = lcmt_pd_config()
-
-        # massage the action into the desired output message form
-        action_msg.num_joints = len(self.joint_default)
-        action_msg.joint_names = self.joint_names
-        action_msg.desired_velocity = [0] * action_msg.num_joints
-        action_msg.desired_position = action
-        action_msg.timestamp = int(time.time() * 1e6)
-        action_msg.kp = self.kp_default
-        action_msg.kd = self.kd_default
+        action_msg = lcmt_radio_out()
+        action_msg.channel[0:4] = action  # does slicing work here?
 
         # send LCM message with the desired action
-        self.lcm.publish(self.action_channel, action_msg.encode())
+        self.lc.publish(self.action_channel, action_msg.encode())
 
         # wait and get the last LCM message with the desired robot state
         time.sleep(1/self.rate)
@@ -99,6 +74,7 @@ class CassieEnv_JointAngles(gym.Env):
         self.state = self.state_queue.get(block=True)
 
         # check on self.state (maybe say failure is CoM height below a threshold = falling?)
+        '''
         if self.state[self.joint_map["pelvis_z"]] < 0.4:
             self.done = True
             self.sim.terminate()
@@ -107,7 +83,8 @@ class CassieEnv_JointAngles(gym.Env):
         else:
             self.done = False
             # really simple reward for now
-            reward = -np.abs(self.height_des - self.state[self.pos_names.index("pelvis_z")])
+        '''
+        reward = -np.abs(self.state - goal_state) * 0
 
         return self.state, reward, self.done
 
@@ -122,28 +99,16 @@ class CassieEnv_JointAngles(gym.Env):
         print("using ic", ic_idx)
         ic = self.all_ics[:,ic_idx]
         
-        # init_height = np.random.rand() * 0.3 + 0.6  # range of [0.6, 0.9)
-        self.ctrlr = sp.Popen([self.bin_dir + self.controller_p, "--channel_x=" + self.state_channel])
+        self.ctrlr = sp.Popen([self.bin_dir + self.controller_p, ])
         self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--ic_idx=" + str(ic_idx)])
-        # self.sim = sp.Popen([self.bin_dir + self.simulation_p])
 
         # TODO: do I need to send a nominal action message so the robot doesn't fall over?
         # wait until we receive a state from the simulation to start doing stuff.
         while self.state_queue.qsize() < 1:
             self.lc.handle()
         self.state = self.state_queue.get(block=True)
-
-        print("publishing nominal joint state")
-        action_msg = lcmt_pd_config()
-        action_msg.num_joints = len(self.joint_default)
-        action_msg.joint_names = self.joint_names
-        action_msg.desired_velocity = [0] * action_msg.num_joints
-        action_msg.desired_position = ic[self.joints_in_pos_array]
-        action_msg.timestamp = int(time.time() * 1e6)
-        action_msg.kp = self.kp_default
-        action_msg.kd = self.kd_default
-        self.lc.publish(self.action_channel, action_msg.encode())
-        
+        action_msg = lcmt_radio_out()
+        action_msg.channel[0:4] = [0]*4
         return self.state
 
 
@@ -155,8 +120,9 @@ class CassieEnv_JointAngles(gym.Env):
         
 
 def main():
-    env = CassieEnv_JointAngles("PD_CONFIG", "CASSIE_STATE_SIMULATION", 200)
+    env = CassieEnv_Joystick("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_SIMULATION", 200)
     s = env.reset()
+    s, r, d = env.step([0.2, 0, 0, 0], 0)  # just to see what happens
     time.sleep(5)
     env.kill_procs()
 
