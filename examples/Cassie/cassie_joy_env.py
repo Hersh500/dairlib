@@ -34,7 +34,7 @@ class CassieEnv_Joystick(gym.Env):
 
         # Assuming running from dairlib/
         self.bin_dir = "./bazel-bin/examples/Cassie/"
-        self.controller_p = "run_osc_standing_controller"
+        self.controller_p = "run_osc_walking_controller"
         self.simulation_p = "rl_multibody_sim"
         self.ctrlr_options = ["--use_radio=1", "--cassie_out_channel=CASSIE_OUTPUT", "--channel_x="+self.state_channel]
 
