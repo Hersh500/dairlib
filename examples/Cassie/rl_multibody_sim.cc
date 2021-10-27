@@ -14,7 +14,6 @@
 #include "multibody/multibody_utils.h"
 #include "systems/primitives/subvector_pass_through.h"
 #include "systems/robot_lcm_systems.h"
-#include "systems/framework/lcm_driven_loop.h"
 
 
 #include "drake/lcm/drake_lcm.h"
@@ -93,6 +92,7 @@ int do_main_test(int argc, char* argv[]) {
   SceneGraph<double>& scene_graph = *builder.AddSystem<SceneGraph>();
   scene_graph.set_name("scene_graph");
 
+
   const double time_step = FLAGS_time_stepping ? FLAGS_dt : 0.0;
   MultibodyPlant<double>& plant = *builder.AddSystem<MultibodyPlant>(time_step);
   if (FLAGS_floating_base) {
@@ -151,6 +151,7 @@ int do_main_test(int argc, char* argv[]) {
   auto sensor_pub =
       builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_cassie_out>(
           "CASSIE_OUTPUT", lcm, 1.0 / FLAGS_publish_rate));
+
 
   // connect leaf systems
   builder.Connect(*input_sub, *input_receiver);

@@ -69,8 +69,11 @@ DEFINE_string(channel_x, "CASSIE_STATE_SIMULATION",
               "use CASSIE_STATE_DISPATCHER to get state from state estimator");
 DEFINE_string(channel_u, "CASSIE_INPUT",
               "The name of the channel which publishes command");
+
+// TODO: set to true for radio joy messages
 DEFINE_bool(use_radio, false,
             "Set to true if sending high level commands from radio controller");
+// TODO: for learning set to CASSIE_OUTPUT
 DEFINE_string(
     cassie_out_channel, "CASSIE_OUTPUT_ECHO",
     "The name of the channel to receive the cassie out structure from.");

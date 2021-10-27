@@ -102,8 +102,8 @@ int doMain(int argc, char* argv[]) {
   /// Set realtime rate. Otherwise, runs as fast as possible
   auto stepper = std::make_unique<drake::systems::Simulator<double>>(
       *diagram, std::move(context));
-  stepper->set_publish_every_time_step(false);
-  stepper->set_publish_at_initialization(false);
+  stepper->set_publish_every_time_step(true);
+  stepper->set_publish_at_initialization(true);
   stepper->set_target_realtime_rate(1.0);
   stepper->Initialize();
 

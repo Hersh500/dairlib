@@ -34,9 +34,9 @@ class CassieEnv_Joystick(gym.Env):
 
         # Assuming running from dairlib/
         self.bin_dir = "./bazel-bin/examples/Cassie/"
-        self.controller_p = "run_osc_walking_controller"
+        self.controller_p = "run_osc_standing_controller"
         self.simulation_p = "rl_multibody_sim"
-        self.ctrlr_options = "--use_radio=True --cassie_out_channel=CASSIE_OUTPUT --channel_x="+self.state_channel
+        self.ctrlr_options = ["--use_radio=1", "--cassie_out_channel=CASSIE_OUTPUT", "--channel_x="+self.state_channel]
 
         # get grid of all initial conditions
         self.all_ics = []
@@ -99,7 +99,7 @@ class CassieEnv_Joystick(gym.Env):
         print("using ic", ic_idx)
         ic = self.all_ics[:,ic_idx]
         
-        self.ctrlr = sp.Popen([self.bin_dir + self.controller_p, ])
+        self.ctrlr = sp.Popen([self.bin_dir + self.controller_p] + self.ctrlr_options)
         self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--ic_idx=" + str(ic_idx)])
 
         # TODO: do I need to send a nominal action message so the robot doesn't fall over?
@@ -107,8 +107,6 @@ class CassieEnv_Joystick(gym.Env):
         while self.state_queue.qsize() < 1:
             self.lc.handle()
         self.state = self.state_queue.get(block=True)
-        action_msg = lcmt_radio_out()
-        action_msg.channel[0:4] = [0]*4
         return self.state
 
 
@@ -122,7 +120,7 @@ class CassieEnv_Joystick(gym.Env):
 def main():
     env = CassieEnv_Joystick("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_SIMULATION", 200)
     s = env.reset()
-    s, r, d = env.step([0.2, 0, 0, 0], 0)  # just to see what happens
+    s, r, d = env.step([0.1, 0.2, 0.3, 0.4], 0)  # just to see what happens
     time.sleep(5)
     env.kill_procs()
 
