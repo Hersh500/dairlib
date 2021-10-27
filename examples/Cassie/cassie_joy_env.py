@@ -120,7 +120,7 @@ class CassieEnv_Joystick(gym.Env):
 def main():
     env = CassieEnv_Joystick("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_SIMULATION", 200)
     s = env.reset()
-    s, r, d = env.step([0.1, 0.2, 0.3, 0.4], 0)  # just to see what happens
+    s, r, d = env.step([0.2, 0, 0, 0], 0)  # just to see what happens
     time.sleep(5)
     env.kill_procs()
 
