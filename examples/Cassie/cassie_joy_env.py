@@ -45,6 +45,11 @@ class CassieEnv_Joystick(gym.Env):
             for row in reader:
                 self.all_ics.append([float(num) for num in row])
         self.all_ics = np.array(self.all_ics)
+
+        # spawn the director and visualizer
+        self.drake_director = sp.Popen(["bazel-bin/director/drake-director", "--use_builtin_scripts=frame,image", "--script", "examples/Cassie/director_scripts/pd_panel.py", "--script", "examples/Cassie/director_scripts/show_time.py"])
+        # have to sleep here otherwise visualization throws an error since director takes time to startup
+        time.sleep(2)
         return
 
 
@@ -120,7 +125,7 @@ class CassieEnv_Joystick(gym.Env):
 def main():
     env = CassieEnv_Joystick("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_SIMULATION", 200)
     s = env.reset()
-    s, r, d = env.step([0.2, 0, 0, 0], 0)  # just to see what happens
+    # s, r, d = env.step([0.2, 0, 0, 0], 0)  # just to see what happens
     time.sleep(5)
     env.kill_procs()
 

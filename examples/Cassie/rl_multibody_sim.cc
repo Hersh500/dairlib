@@ -15,7 +15,7 @@
 #include "systems/primitives/subvector_pass_through.h"
 #include "systems/robot_lcm_systems.h"
 
-
+#include "drake/geometry/drake_visualizer.h"
 #include "drake/lcm/drake_lcm.h"
 #include "drake/lcmt_contact_results_for_viz.hpp"
 #include "drake/multibody/parsing/parser.h"
@@ -31,6 +31,7 @@
 namespace dairlib {
 using dairlib::systems::SubvectorPassThrough;
 using drake::geometry::SceneGraph;
+using drake::geometry::DrakeVisualizer;
 using drake::multibody::ContactResultsToLcmSystem;
 using drake::multibody::MultibodyPlant;
 using drake::multibody::Parser;
@@ -177,6 +178,8 @@ int do_main_test(int argc, char* argv[]) {
   builder.Connect(sensor_aggregator.get_output_port(0),
                   sensor_pub->get_input_port());
 
+  // visualizer stuff
+  DrakeVisualizer<double>::AddToBuilder(&builder, scene_graph);
   auto diagram = builder.Build();
 
   // Create a context for this system:
