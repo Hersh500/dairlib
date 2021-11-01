@@ -23,6 +23,15 @@ load(
 )
 
 cc_library(
+    name = "camera_utils",
+    srcs = ["camera_utils.cc"],
+    hdrs = ["camera_utils.h"],
+    deps = [
+        "@drake//:drake_shared_library",
+    ],
+)
+
+cc_library(
     name = "cassie_utils",
     srcs = ["cassie_utils.cc"],
     hdrs = ["cassie_utils.h"],
@@ -226,6 +235,7 @@ cc_binary(
     name = "rl_multibody_sim",
     srcs = ["rl_multibody_sim.cc"],
     deps = [
+        ":camera_utils",
         ":cassie_encoder",
         ":cassie_fixed_point_solver",
         ":cassie_urdf",

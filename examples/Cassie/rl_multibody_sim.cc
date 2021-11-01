@@ -9,11 +9,13 @@
 #include "dairlib/lcmt_cassie_out.hpp"
 #include "dairlib/lcmt_robot_input.hpp"
 #include "dairlib/lcmt_robot_output.hpp"
-#include "examples/Cassie/cassie_fixed_point_solver.h"
 #include "examples/Cassie/cassie_utils.h"
 #include "multibody/multibody_utils.h"
 #include "systems/primitives/subvector_pass_through.h"
 #include "systems/robot_lcm_systems.h"
+#include "examples/Cassie/camera_utils.h"
+
+#include "drake/geometry/render/render_engine_vtk_factory.h"
 
 #include "drake/geometry/drake_visualizer.h"
 #include "drake/lcm/drake_lcm.h"
@@ -27,6 +29,8 @@
 #include "drake/systems/lcm/lcm_publisher_system.h"
 #include "drake/systems/lcm/lcm_subscriber_system.h"
 #include "drake/systems/primitives/discrete_time_delay.h"
+#include "drake/systems/sensors/rgbd_sensor.h"
+#include "drake/systems/sensors/image_to_lcm_image_array_t.h"
 
 namespace dairlib {
 using dairlib::systems::SubvectorPassThrough;
@@ -38,6 +42,8 @@ using drake::multibody::Parser;
 using drake::systems::Context;
 using drake::systems::DiagramBuilder;
 using drake::systems::Simulator;
+using drake::geometry::render::MakeRenderEngineVtk;
+using drake::geometry::render::RenderEngineVtkParams;
 
 using drake::systems::lcm::LcmPublisherSystem;
 using drake::systems::lcm::LcmSubscriberSystem;
@@ -92,6 +98,10 @@ int do_main_test(int argc, char* argv[]) {
   DiagramBuilder<double> builder;
   SceneGraph<double>& scene_graph = *builder.AddSystem<SceneGraph>();
   scene_graph.set_name("scene_graph");
+
+  const std::string renderer_name = "multibody_renderer_gl";
+  scene_graph.AddRenderer(renderer_name,
+                          drake::geometry::render::MakeRenderEngineVtk(drake::geometry::render::RenderEngineVtkParams()));
 
   const double time_step = FLAGS_time_stepping ? FLAGS_dt : 0.0;
   MultibodyPlant<double>& plant = *builder.AddSystem<MultibodyPlant>(time_step);
@@ -178,7 +188,38 @@ int do_main_test(int argc, char* argv[]) {
   builder.Connect(sensor_aggregator.get_output_port(0),
                   sensor_pub->get_input_port());
 
+  // Add camera to the simulation (TODO(hersh): fix tabs)
+    const auto& [color_camera, depth_camera] =
+    camera::MakeD415CameraModel(renderer_name);
+    const std::optional<drake::geometry::FrameId> parent_body_id =
+            plant.GetBodyFrameIdIfExists(plant.GetFrameByName("pelvis").body().index());
+
+    drake::math::RigidTransform<double> cam_transform = drake::math::RigidTransform<double>(drake::math::RollPitchYaw<double>(-0.3, 0.8, 1.5),
+            Eigen::Vector3d(0, -1.5, 1.5));
+
+    auto camera = builder.template AddSystem<drake::systems::sensors::RgbdSensor>(
+            parent_body_id.value(), cam_transform, color_camera, depth_camera);
+
+    builder.Connect(scene_graph.get_query_output_port(),
+                    camera->query_object_input_port());
+
+    // TODO(hersh): make this a dairlib lcm type for consistency.
+    auto image_to_lcm_image_array =
+            builder.AddSystem<drake::systems::sensors::ImageToLcmImageArrayT>();
+    image_to_lcm_image_array->set_name("converter");
+    const auto& cam_port = image_to_lcm_image_array->DeclareImageInputPort<drake::systems::sensors::PixelType::kRgba8U>(
+                            "camera_0");
+    builder.Connect(camera->color_image_output_port(), cam_port);
+
+    auto image_array_lcm_publisher = builder.AddSystem(LcmPublisherSystem::Make<drake::lcmt_image_array>(
+                    "DRAKE_RGBD_CAMERA_IMAGES", lcm,
+                    1.0 / 5));
+    image_array_lcm_publisher->set_name("rgbd_publisher");
+    builder.Connect(image_to_lcm_image_array->image_array_t_msg_output_port(),
+                    image_array_lcm_publisher->get_input_port());
+
   // visualizer stuff
+  // TODO(hershs): is there a way to only have it visualize the robot and not images?
   DrakeVisualizer<double>::AddToBuilder(&builder, scene_graph);
   auto diagram = builder.Build();
 
