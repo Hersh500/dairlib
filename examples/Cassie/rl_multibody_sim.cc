@@ -99,7 +99,7 @@ int do_main_test(int argc, char* argv[]) {
   SceneGraph<double>& scene_graph = *builder.AddSystem<SceneGraph>();
   scene_graph.set_name("scene_graph");
 
-  const std::string renderer_name = "multibody_renderer_gl";
+  const std::string renderer_name = "multibody_renderer_vtk";
   scene_graph.AddRenderer(renderer_name,
                           drake::geometry::render::MakeRenderEngineVtk(drake::geometry::render::RenderEngineVtkParams()));
 
@@ -109,7 +109,17 @@ int do_main_test(int argc, char* argv[]) {
     multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
   }
 
-  std::string urdf;
+    Parser parser(&plant, &scene_graph);
+    std::string terrain_name =
+            FindResourceOrThrow("examples/impact_invariant_control/platform.urdf");
+    parser.AddModelFromFile(terrain_name);
+    Eigen::Vector3d offset;
+    offset << 0.15, 0, 0.1;
+    plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base"),
+                     drake::math::RigidTransform<double>(offset));
+
+
+        std::string urdf;
   if (FLAGS_spring_model) {
     urdf = "examples/Cassie/urdf/cassie_v2.urdf";
   } else {

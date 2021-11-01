@@ -47,7 +47,7 @@ class CassieEnv_Joystick(gym.Env):
         self.all_ics = np.array(self.all_ics)
 
         # spawn the director and visualizer
-        self.drake_director = sp.Popen(["bazel-bin/director/drake-director", "--use_builtin_scripts=frame", "--script", "examples/Cassie/director_scripts/pd_panel.py", "--script", "examples/Cassie/director_scripts/show_time.py"])
+        self.drake_director = sp.Popen(["bazel-bin/director/drake-director", "--use_builtin_scripts=frame, image", "--script", "examples/Cassie/director_scripts/pd_panel.py", "--script", "examples/Cassie/director_scripts/show_time.py"])
         # have to sleep here otherwise visualization throws an error since director takes time to startup
         time.sleep(5)
         return
