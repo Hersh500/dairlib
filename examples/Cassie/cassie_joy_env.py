@@ -128,8 +128,8 @@ def main():
     try: 
         env = CassieEnv_Joystick("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_SIMULATION", 200)
         s = env.reset()
-        # s, r, d = env.step([0.2, 0, 0, 0], 0)  # just to see what happens
-        time.sleep(5)
+        s, r, d = env.step([0.0, 0, 0, 0], 0)  # just to see what happens
+        time.sleep(90)
         env.kill_procs()
         env.kill_director()
     except KeyboardInterrupt:

@@ -109,17 +109,43 @@ int do_main_test(int argc, char* argv[]) {
     multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
   }
 
-    Parser parser(&plant, &scene_graph);
-    std::string terrain_name =
-            FindResourceOrThrow("examples/impact_invariant_control/platform.urdf");
-    parser.AddModelFromFile(terrain_name);
-    Eigen::Vector3d offset;
-    offset << 0.15, 0, 0.1;
-    plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base"),
-                     drake::math::RigidTransform<double>(offset));
+  Parser parser(&plant, &scene_graph);
+  std::string terrain_name =
+          FindResourceOrThrow("examples/impact_invariant_control/platform.urdf");
+  parser.AddModelFromFile(terrain_name);
+  Eigen::Vector3d offset;
+  offset << 1, 0, 0.1;
+  plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base"),
+                   drake::math::RigidTransform<double>(offset));
 
+//  terrain_name = FindResourceOrThrow("examples/Cassie/platform_green.urdf");
+//  parser.AddModelFromFile(terrain_name);
+//  Eigen::Vector3d offset_g;
+//  offset_g << -6, 0, 0.1;
+//  plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base_g"),
+//                   drake::math::RigidTransform<double>(offset_g));
+//
+//  terrain_name = FindResourceOrThrow("examples/Cassie/platform_red.urdf");
+//  parser.AddModelFromFile(terrain_name);
+//  Eigen::Vector3d offset_r;
+//  offset_r << 0, 6, 0.1;
+//  plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base_r"),
+//                   drake::math::RigidTransform<double>(offset_r));
+//
+//  terrain_name = FindResourceOrThrow("examples/Cassie/platform_orange.urdf");
+//  parser.AddModelFromFile(terrain_name);
+//  Eigen::Vector3d offset_o;
+//  offset_o << 0, -6, 0.1;
+//  plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base_o"),
+//                   drake::math::RigidTransform<double>(offset_o));
+//
+//    terrain_name = FindResourceOrThrow("examples/Cassie/platform_orange.urdf");
+//    drake::multibody::ModelInstanceIndex i = parser.AddModelFromFile(terrain_name, "orange_up");
+//    offset_o << 0, 0, 10;
+//    plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base_o", i),
+//                     drake::math::RigidTransform<double>(offset_o));
 
-        std::string urdf;
+  std::string urdf;
   if (FLAGS_spring_model) {
     urdf = "examples/Cassie/urdf/cassie_v2.urdf";
   } else {
@@ -203,11 +229,11 @@ int do_main_test(int argc, char* argv[]) {
     camera::MakeD415CameraModel(renderer_name);
     const std::optional<drake::geometry::FrameId> parent_body_id =
             plant.GetBodyFrameIdIfExists(plant.GetFrameByName("pelvis").body().index());
+//    const std::optional<drake::geometry::FrameId> parent_body_id = plant.GetBodyFrameIdIfExists(plant.world_frame().body().index());
+    drake::math::RigidTransform<double> cam_transform = drake::math::RigidTransform<double>(drake::math::RollPitchYaw<double>(-2.5, 0.0, -1.57),
+            Eigen::Vector3d(0.2, -0.1, 0.1));
 
-    drake::math::RigidTransform<double> cam_transform = drake::math::RigidTransform<double>(drake::math::RollPitchYaw<double>(-0.3, 0.8, 1.5),
-            Eigen::Vector3d(0, -1.5, 1.5));
-
-    auto camera = builder.template AddSystem<drake::systems::sensors::RgbdSensor>(
+    auto camera = builder.AddSystem<drake::systems::sensors::RgbdSensor>(
             parent_body_id.value(), cam_transform, color_camera, depth_camera);
 
     builder.Connect(scene_graph.get_query_output_port(),
@@ -217,19 +243,18 @@ int do_main_test(int argc, char* argv[]) {
     auto image_to_lcm_image_array =
             builder.AddSystem<drake::systems::sensors::ImageToLcmImageArrayT>();
     image_to_lcm_image_array->set_name("converter");
-    const auto& cam_port = image_to_lcm_image_array->DeclareImageInputPort<drake::systems::sensors::PixelType::kRgba8U>(
+    const auto& cam_port = image_to_lcm_image_array->DeclareImageInputPort<drake::systems::sensors::PixelType::kDepth16U>(
                             "camera_0");
-    builder.Connect(camera->color_image_output_port(), cam_port);
+    builder.Connect(camera->depth_image_16U_output_port(), cam_port);
 
     auto image_array_lcm_publisher = builder.AddSystem(LcmPublisherSystem::Make<drake::lcmt_image_array>(
                     "DRAKE_RGBD_CAMERA_IMAGES", lcm,
-                    1.0 / 5));
+                    1.0 / 10));
     image_array_lcm_publisher->set_name("rgbd_publisher");
     builder.Connect(image_to_lcm_image_array->image_array_t_msg_output_port(),
                     image_array_lcm_publisher->get_input_port());
 
   // visualizer stuff
-  // TODO(hershs): is there a way to only have it visualize the robot and not images?
   DrakeVisualizer<double>::AddToBuilder(&builder, scene_graph);
   auto diagram = builder.Build();
 
