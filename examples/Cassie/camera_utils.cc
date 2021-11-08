@@ -44,7 +44,7 @@ MakeD415CameraModel(const std::string &renderer_name) {
             Vector3d(0.015, -0.00019, -0.0001));
     drake::geometry::render::DepthRenderCamera depth_camera{
             {renderer_name,
-                    {kWidth, kHeight, 645.138, 645.138, 420.789, 239.13} /* intrinsics */,
+                    {kWidth, kHeight, 645.138/2, 645.138/2, 420.789, 239.13} /* intrinsics */,
                     {0.01, 10.0} /* clipping_range */,
                     X_BD},
             {0.1,   10.0} /* depth_range */};

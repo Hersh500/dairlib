@@ -32,6 +32,15 @@ cc_library(
 )
 
 cc_library(
+    name = "terrain_utils",
+    srcs = ["terrain_utils.cc"],
+    hdrs = ["terrain_utils.h"],
+    deps = [
+        "@drake//:drake_shared_library",
+    ],
+)
+
+cc_library(
     name = "cassie_utils",
     srcs = ["cassie_utils.cc"],
     hdrs = ["cassie_utils.h"],

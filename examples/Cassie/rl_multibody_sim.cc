@@ -16,7 +16,6 @@
 #include "examples/Cassie/camera_utils.h"
 
 #include "drake/geometry/render/render_engine_vtk_factory.h"
-
 #include "drake/geometry/drake_visualizer.h"
 #include "drake/lcm/drake_lcm.h"
 #include "drake/lcmt_contact_results_for_viz.hpp"
@@ -112,38 +111,12 @@ int do_main_test(int argc, char* argv[]) {
   Parser parser(&plant, &scene_graph);
   std::string terrain_name =
           FindResourceOrThrow("examples/impact_invariant_control/platform.urdf");
-  parser.AddModelFromFile(terrain_name);
+//  std::string terrain_name = FindResourceOrThrow("examples/Cassie/terrains/stairs_arena/stair_test_arena.sdf");
+  drake::multibody::ModelInstanceIndex i = parser.AddModelFromFile(terrain_name);
   Eigen::Vector3d offset;
   offset << 1, 0, 0.1;
-  plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base"),
+  plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("body", i),
                    drake::math::RigidTransform<double>(offset));
-
-//  terrain_name = FindResourceOrThrow("examples/Cassie/platform_green.urdf");
-//  parser.AddModelFromFile(terrain_name);
-//  Eigen::Vector3d offset_g;
-//  offset_g << -6, 0, 0.1;
-//  plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base_g"),
-//                   drake::math::RigidTransform<double>(offset_g));
-//
-//  terrain_name = FindResourceOrThrow("examples/Cassie/platform_red.urdf");
-//  parser.AddModelFromFile(terrain_name);
-//  Eigen::Vector3d offset_r;
-//  offset_r << 0, 6, 0.1;
-//  plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base_r"),
-//                   drake::math::RigidTransform<double>(offset_r));
-//
-//  terrain_name = FindResourceOrThrow("examples/Cassie/platform_orange.urdf");
-//  parser.AddModelFromFile(terrain_name);
-//  Eigen::Vector3d offset_o;
-//  offset_o << 0, -6, 0.1;
-//  plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base_o"),
-//                   drake::math::RigidTransform<double>(offset_o));
-//
-//    terrain_name = FindResourceOrThrow("examples/Cassie/platform_orange.urdf");
-//    drake::multibody::ModelInstanceIndex i = parser.AddModelFromFile(terrain_name, "orange_up");
-//    offset_o << 0, 0, 10;
-//    plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base_o", i),
-//                     drake::math::RigidTransform<double>(offset_o));
 
   std::string urdf;
   if (FLAGS_spring_model) {
@@ -230,8 +203,8 @@ int do_main_test(int argc, char* argv[]) {
     const std::optional<drake::geometry::FrameId> parent_body_id =
             plant.GetBodyFrameIdIfExists(plant.GetFrameByName("pelvis").body().index());
 //    const std::optional<drake::geometry::FrameId> parent_body_id = plant.GetBodyFrameIdIfExists(plant.world_frame().body().index());
-    drake::math::RigidTransform<double> cam_transform = drake::math::RigidTransform<double>(drake::math::RollPitchYaw<double>(-2.5, 0.0, -1.57),
-            Eigen::Vector3d(0.2, -0.1, 0.1));
+    drake::math::RigidTransform<double> cam_transform = drake::math::RigidTransform<double>(drake::math::RollPitchYaw<double>(-3.0, -0.1, -1.7),
+            Eigen::Vector3d(0.15, 0, 0.2));
 
     auto camera = builder.AddSystem<drake::systems::sensors::RgbdSensor>(
             parent_body_id.value(), cam_transform, color_camera, depth_camera);
