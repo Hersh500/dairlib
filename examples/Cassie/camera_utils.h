@@ -13,6 +13,8 @@ namespace camera {
 std::pair<drake::geometry::render::ColorRenderCamera,
         drake::geometry::render::DepthRenderCamera> MakeD415CameraModel(const std::string &renderer_name);
 
+std::pair<drake::geometry::render::ColorRenderCamera,
+        drake::geometry::render::DepthRenderCamera> MakeGenericCameraModel(const std::string &renderer_name);
 }
 }
 #endif //DAIRLIB_CAMERA_UTILS_H

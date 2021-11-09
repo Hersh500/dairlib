@@ -118,7 +118,7 @@ int do_main_test(int argc, char* argv[]) {
 //  plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("body", i),
 //                   drake::math::RigidTransform<double>(offset));
 
-  std::pair<double, double> x_lims(0, 5);
+  std::pair<double, double> x_lims(0.5, 4);
   std::pair<double, double> y_lims(-3, 3);
   generateRandomObstacles(&plant, x_lims, y_lims);
 
@@ -203,12 +203,12 @@ int do_main_test(int argc, char* argv[]) {
 
   // Add camera to the simulation (TODO(hersh500): fix tabs)
     const auto& [color_camera, depth_camera] =
-    camera::MakeD415CameraModel(renderer_name);
+    camera::MakeGenericCameraModel(renderer_name);
     const std::optional<drake::geometry::FrameId> parent_body_id =
             plant.GetBodyFrameIdIfExists(plant.GetFrameByName("pelvis").body().index());
 //    const std::optional<drake::geometry::FrameId> parent_body_id = plant.GetBodyFrameIdIfExists(plant.world_frame().body().index());
-    drake::math::RigidTransform<double> cam_transform = drake::math::RigidTransform<double>(drake::math::RollPitchYaw<double>(-3.0, -0.1, -1.7),
-            Eigen::Vector3d(0.15, -0.1, 0.2));
+    drake::math::RigidTransform<double> cam_transform = drake::math::RigidTransform<double>(drake::math::RollPitchYaw<double>(-2.4, 0.0, -1.7),
+            Eigen::Vector3d(0.15, 0, 0.2));
 
     auto camera = builder.AddSystem<drake::systems::sensors::RgbdSensor>(
             parent_body_id.value(), cam_transform, color_camera, depth_camera);

@@ -47,7 +47,7 @@ class CassieEnv_Joystick(gym.Env):
         self.all_ics = np.array(self.all_ics)
 
         # spawn the director and visualizer
-        self.drake_director = sp.Popen(["bazel-bin/director/drake-director", "--use_builtin_scripts=frame, image", "--script", "examples/Cassie/director_scripts/show_time.py"])
+        self.drake_director = sp.Popen(["bazel-bin/director/drake-director", "--use_builtin_scripts=frame,image", "--script", "examples/Cassie/director_scripts/show_time.py"])
         # have to sleep here otherwise visualization throws an error since director takes time to startup
         time.sleep(5)
         return
@@ -60,7 +60,7 @@ class CassieEnv_Joystick(gym.Env):
         state = np.array(list(msg.position[0:7]) + list(msg.velocity[0:6]))
         self.state_queue.put(state)
 
-
+    # TODO: need to get the drake image output type somehow
     def step(self, action, goal_state):
         # see examples/director_scripts/pd_panel.py
         action_msg = lcmt_radio_out()
@@ -89,6 +89,8 @@ class CassieEnv_Joystick(gym.Env):
             self.done = False
             # really simple reward for now
         '''
+        # TODO: dimensionality reduction on the state to get the COM distance to the goal, COM velocity
+
         reward = -np.abs(self.state - goal_state) * 0
 
         return self.state, reward, self.done

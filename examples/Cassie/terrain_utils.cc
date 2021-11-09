@@ -46,7 +46,7 @@ namespace dairlib {
         }
     }
 
-    // TODO(hersh500): This doesn't work for collisions (results in an error)
+    // TODO(hersh500): This doesn't work for collisions (results in an error when the collision happens)
     void generateRandomObstaclesGraph(SceneGraph<double> graph,
                                       std::pair<double, double> x_lims,
                                       std::pair<double, double> y_lims) {
