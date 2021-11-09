@@ -244,6 +244,7 @@ cc_binary(
     name = "rl_multibody_sim",
     srcs = ["rl_multibody_sim.cc"],
     deps = [
+        ":terrain_utils",
         ":camera_utils",
         ":cassie_encoder",
         ":cassie_fixed_point_solver",

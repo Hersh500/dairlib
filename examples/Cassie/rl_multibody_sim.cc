@@ -1,5 +1,4 @@
 #include <memory>
-#include <stdio.h>
 
 #include <drake/systems/primitives/discrete_time_delay.h>
 #include <drake/systems/primitives/multiplexer.h>
@@ -14,6 +13,7 @@
 #include "systems/primitives/subvector_pass_through.h"
 #include "systems/robot_lcm_systems.h"
 #include "examples/Cassie/camera_utils.h"
+#include "examples/Cassie/terrain_utils.h"
 
 #include "drake/geometry/render/render_engine_vtk_factory.h"
 #include "drake/geometry/drake_visualizer.h"
@@ -108,15 +108,19 @@ int do_main_test(int argc, char* argv[]) {
     multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
   }
 
-  Parser parser(&plant, &scene_graph);
-  std::string terrain_name =
-          FindResourceOrThrow("examples/impact_invariant_control/platform.urdf");
-//  std::string terrain_name = FindResourceOrThrow("examples/Cassie/terrains/stairs_arena/stair_test_arena.sdf");
-  drake::multibody::ModelInstanceIndex i = parser.AddModelFromFile(terrain_name);
-  Eigen::Vector3d offset;
-  offset << 1, 0, 0.1;
-  plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("body", i),
-                   drake::math::RigidTransform<double>(offset));
+//  Parser parser(&plant, &scene_graph);
+//  std::string terrain_name =
+//          FindResourceOrThrow("examples/impact_invariant_control/platform.urdf");
+////  std::string terrain_name = FindResourceOrThrow("examples/Cassie/terrains/stairs_arena/stair_test_arena.sdf");
+//  drake::multibody::ModelInstanceIndex i = parser.AddModelFromFile(terrain_name);
+//  Eigen::Vector3d offset;
+//  offset << 1, 0, 0.1;
+//  plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("body", i),
+//                   drake::math::RigidTransform<double>(offset));
+
+  std::pair<double, double> x_lims(0, 5);
+  std::pair<double, double> y_lims(-3, 3);
+  generateRandomObstacles(&plant, x_lims, y_lims);
 
   std::string urdf;
   if (FLAGS_spring_model) {
@@ -197,14 +201,14 @@ int do_main_test(int argc, char* argv[]) {
   builder.Connect(sensor_aggregator.get_output_port(0),
                   sensor_pub->get_input_port());
 
-  // Add camera to the simulation (TODO(hersh): fix tabs)
+  // Add camera to the simulation (TODO(hersh500): fix tabs)
     const auto& [color_camera, depth_camera] =
     camera::MakeD415CameraModel(renderer_name);
     const std::optional<drake::geometry::FrameId> parent_body_id =
             plant.GetBodyFrameIdIfExists(plant.GetFrameByName("pelvis").body().index());
 //    const std::optional<drake::geometry::FrameId> parent_body_id = plant.GetBodyFrameIdIfExists(plant.world_frame().body().index());
     drake::math::RigidTransform<double> cam_transform = drake::math::RigidTransform<double>(drake::math::RollPitchYaw<double>(-3.0, -0.1, -1.7),
-            Eigen::Vector3d(0.15, 0, 0.2));
+            Eigen::Vector3d(0.15, -0.1, 0.2));
 
     auto camera = builder.AddSystem<drake::systems::sensors::RgbdSensor>(
             parent_body_id.value(), cam_transform, color_camera, depth_camera);
@@ -212,7 +216,7 @@ int do_main_test(int argc, char* argv[]) {
     builder.Connect(scene_graph.get_query_output_port(),
                     camera->query_object_input_port());
 
-    // TODO(hersh): make this a dairlib lcm type for consistency.
+    // TODO(hersh500): make this a dairlib lcm type for consistency.
     auto image_to_lcm_image_array =
             builder.AddSystem<drake::systems::sensors::ImageToLcmImageArrayT>();
     image_to_lcm_image_array->set_name("converter");
