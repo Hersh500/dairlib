@@ -6,13 +6,11 @@
 
 #include "common/file_utils.h"
 #include "dairlib/lcmt_cassie_out.hpp"
-#include "dairlib/lcmt_image_array.hpp"
 #include "dairlib/lcmt_robot_output.hpp"
 #include "examples/Cassie/cassie_utils.h"
 #include "multibody/multibody_utils.h"
 #include "systems/primitives/subvector_pass_through.h"
 #include "systems/robot_lcm_systems.h"
-#include "systems/ImageToLcmImageArray.h"
 #include "examples/Cassie/camera_utils.h"
 #include "examples/Cassie/terrain_utils.h"
 
@@ -216,15 +214,14 @@ int do_main_test(int argc, char* argv[]) {
     builder.Connect(scene_graph.get_query_output_port(),
                     camera->query_object_input_port());
 
-    // TODO(hersh500): make this a dairlib lcm type for consistency.
     auto image_to_lcm_image_array =
-            builder.AddSystem<dairlib::systems::ImageToLcmImageArrayT>();
+            builder.AddSystem<drake::systems::sensors::ImageToLcmImageArrayT>();
     image_to_lcm_image_array->set_name("converter");
     const auto& cam_port = image_to_lcm_image_array->DeclareImageInputPort<drake::systems::sensors::PixelType::kDepth16U>(
                             "camera_0");
     builder.Connect(camera->depth_image_16U_output_port(), cam_port);
 
-    auto image_array_lcm_publisher = builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_image_array>(
+    auto image_array_lcm_publisher = builder.AddSystem(LcmPublisherSystem::Make<drake::lcmt_image_array>(
                     "DRAKE_RGBD_CAMERA_IMAGES", lcm,
                     1.0 / 10));
     image_array_lcm_publisher->set_name("rgbd_publisher");

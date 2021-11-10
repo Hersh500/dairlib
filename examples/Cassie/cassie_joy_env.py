@@ -1,12 +1,14 @@
 # https://lcm-proj.github.io/tut_python.html
 import lcm
-from dairlib import lcmt_robot_output, lcmt_radio_out
+from dairlib import lcmt_robot_output, lcmt_radio_out, lcmt_image_array, lcmt_image
 import subprocess as sp
 import gym
 import queue
 import numpy as np
 import time
 import csv
+from PIL import Image
+import matplotlib.pyplot as plt
 
     
 # TODO(hersh): make a more flexible environment so it's easier to slot in other
@@ -24,8 +26,13 @@ class CassieEnv_Joystick(gym.Env):
         self.sim = None
 
         self.lc = lcm.LCM()
-        self.sub = self.lc.subscribe(state_channel, self.state_handler)
+        self.sub_state = self.lc.subscribe(state_channel, self.state_handler)
+        self.sub_images = self.lc.subscribe("DRAKE_RGBD_CAMERA_IMAGES", self.image_handler)
+
+        # queues for getting the state from drake
         self.state_queue = queue.LifoQueue()
+        self.image_queue = queue.LifoQueue()
+
         self.action_channel = action_channel
         self.state_channel = state_channel
         self.rate = rate
@@ -60,6 +67,21 @@ class CassieEnv_Joystick(gym.Env):
         state = np.array(list(msg.position[0:7]) + list(msg.velocity[0:6]))
         self.state_queue.put(state)
 
+
+    # currently only doing depth image
+    def image_handler(self, channel, data):
+        msg = lcmt_image_array.decode(data)
+        image_msg = msg.images[0]
+        # image_data = np.array(image.data).reshape((image_msg.height, image_msg.width)
+        image_data = image_msg.data
+        if image_msg.bigendian:
+            image = Image.frombytes("I;16B", (image_msg.width, image_msg.height), image_data)
+        else:
+            image = Image.frombytes("I;16", (image_msg.width, image_msg.height), image_data)
+        image = np.array(image)
+        self.image_queue.put(image)
+
+
     # TODO: need to get the drake image output type somehow
     def step(self, action, goal_state):
         # see examples/director_scripts/pd_panel.py
@@ -72,7 +94,7 @@ class CassieEnv_Joystick(gym.Env):
         # wait and get the last LCM message with the desired robot state
         time.sleep(1/self.rate)
 
-        while self.state_queue.qsize() < 1:
+        while self.state_queue.qsize() < 1 and self.image_queue.qsize() < 1:
             self.lc.handle()
 
         # get the next LCM message in the queue
