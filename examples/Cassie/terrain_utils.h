@@ -14,7 +14,7 @@ namespace dairlib {
                                  std::pair<double, double> x_lims,
                                  std::pair<double, double> y_lims);
 
-    void generateRandomObstacles(SceneGraph<double> graph,
+    void generateRandomObstacles(SceneGraph<double>& graph,
                                  std::pair<double, double> x_lims,
                                  std::pair<double, double> y_lims);
 }

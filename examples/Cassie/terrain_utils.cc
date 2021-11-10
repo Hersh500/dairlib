@@ -47,7 +47,7 @@ namespace dairlib {
     }
 
     // TODO(hersh500): This doesn't work for collisions (results in an error when the collision happens)
-    void generateRandomObstaclesGraph(SceneGraph<double> graph,
+    void generateRandomObstacles(SceneGraph<double>& graph,
                                       std::pair<double, double> x_lims,
                                       std::pair<double, double> y_lims) {
         drake::geometry::SourceId terrain_geom_id = graph.RegisterSource("terrain_adder");
@@ -69,8 +69,6 @@ namespace dairlib {
             graph.AssignRole(terrain_geom_id, box_id, drake::geometry::IllustrationProperties());
             drake::geometry::ProximityProperties prox_props = drake::geometry::ProximityProperties();
             prox_props.AddProperty(drake::geometry::internal::kMaterialGroup,
-                                   drake::geometry::internal::kFriction, drake::multibody::CoulombFriction(.8, .8));
-            prox_props.AddProperty(drake::geometry::internal::kComplianceType,
                                    drake::geometry::internal::kFriction, drake::multibody::CoulombFriction(.8, .8));
             graph.AssignRole(terrain_geom_id, box_id, prox_props);
         }

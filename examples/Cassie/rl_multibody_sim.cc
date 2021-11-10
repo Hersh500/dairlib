@@ -6,12 +6,13 @@
 
 #include "common/file_utils.h"
 #include "dairlib/lcmt_cassie_out.hpp"
-#include "dairlib/lcmt_robot_input.hpp"
+#include "dairlib/lcmt_image_array.hpp"
 #include "dairlib/lcmt_robot_output.hpp"
 #include "examples/Cassie/cassie_utils.h"
 #include "multibody/multibody_utils.h"
 #include "systems/primitives/subvector_pass_through.h"
 #include "systems/robot_lcm_systems.h"
+#include "systems/ImageToLcmImageArray.h"
 #include "examples/Cassie/camera_utils.h"
 #include "examples/Cassie/terrain_utils.h"
 
@@ -121,7 +122,7 @@ int do_main_test(int argc, char* argv[]) {
   std::pair<double, double> x_lims(0.5, 4);
   std::pair<double, double> y_lims(-3, 3);
   generateRandomObstacles(&plant, x_lims, y_lims);
-
+//  generateRandomObstacles(scene_graph, x_lims, y_lims);
   std::string urdf;
   if (FLAGS_spring_model) {
     urdf = "examples/Cassie/urdf/cassie_v2.urdf";
@@ -206,7 +207,6 @@ int do_main_test(int argc, char* argv[]) {
     camera::MakeGenericCameraModel(renderer_name);
     const std::optional<drake::geometry::FrameId> parent_body_id =
             plant.GetBodyFrameIdIfExists(plant.GetFrameByName("pelvis").body().index());
-//    const std::optional<drake::geometry::FrameId> parent_body_id = plant.GetBodyFrameIdIfExists(plant.world_frame().body().index());
     drake::math::RigidTransform<double> cam_transform = drake::math::RigidTransform<double>(drake::math::RollPitchYaw<double>(-2.4, 0.0, -1.7),
             Eigen::Vector3d(0.15, 0, 0.2));
 
@@ -218,13 +218,13 @@ int do_main_test(int argc, char* argv[]) {
 
     // TODO(hersh500): make this a dairlib lcm type for consistency.
     auto image_to_lcm_image_array =
-            builder.AddSystem<drake::systems::sensors::ImageToLcmImageArrayT>();
+            builder.AddSystem<dairlib::systems::ImageToLcmImageArrayT>();
     image_to_lcm_image_array->set_name("converter");
     const auto& cam_port = image_to_lcm_image_array->DeclareImageInputPort<drake::systems::sensors::PixelType::kDepth16U>(
                             "camera_0");
     builder.Connect(camera->depth_image_16U_output_port(), cam_port);
 
-    auto image_array_lcm_publisher = builder.AddSystem(LcmPublisherSystem::Make<drake::lcmt_image_array>(
+    auto image_array_lcm_publisher = builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_image_array>(
                     "DRAKE_RGBD_CAMERA_IMAGES", lcm,
                     1.0 / 10));
     image_array_lcm_publisher->set_name("rgbd_publisher");
