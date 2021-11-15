@@ -17,6 +17,9 @@ namespace dairlib {
     void generateRandomObstacles(SceneGraph<double>& graph,
                                  std::pair<double, double> x_lims,
                                  std::pair<double, double> y_lims);
+
+    void generateRandomGaps(MultibodyPlant<double> *plant,
+                            std::pair<double, double> gap_lims);
 }
 
 #endif //DAIRLIB_TERRAIN_UTILS_H

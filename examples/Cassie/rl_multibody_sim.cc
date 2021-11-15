@@ -103,9 +103,11 @@ int do_main_test(int argc, char* argv[]) {
 
   const double time_step = FLAGS_time_stepping ? FLAGS_dt : 0.0;
   MultibodyPlant<double>& plant = *builder.AddSystem<MultibodyPlant>(time_step);
-  if (FLAGS_floating_base) {
-    multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
-  }
+
+//  if (FLAGS_floating_base) {
+//    multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
+//  }
+  plant.RegisterAsSourceForSceneGraph(&scene_graph);
 
 //  Parser parser(&plant, &scene_graph);
 //  std::string terrain_name =
@@ -119,6 +121,9 @@ int do_main_test(int argc, char* argv[]) {
 
   std::pair<double, double> x_lims(0.5, 4);
   std::pair<double, double> y_lims(-3, 3);
+  std::pair<double, double> gap_lims(0.1, 0.3);
+  generateRandomGaps(&plant, gap_lims);
+
 //  generateRandomObstacles(&plant, x_lims, y_lims);
 //  generateRandomObstacles(scene_graph, x_lims, y_lims);
   std::string urdf;
@@ -205,7 +210,7 @@ int do_main_test(int argc, char* argv[]) {
     camera::MakeGenericCameraModel(renderer_name);
     const std::optional<drake::geometry::FrameId> parent_body_id =
             plant.GetBodyFrameIdIfExists(plant.GetFrameByName("pelvis").body().index());
-    drake::math::RigidTransform<double> cam_transform = drake::math::RigidTransform<double>(drake::math::RollPitchYaw<double>(-2.4, 0.0, -1.7),
+    drake::math::RigidTransform<double> cam_transform = drake::math::RigidTransform<double>(drake::math::RollPitchYaw<double>(-2.4, 0.0, -1.5),
             Eigen::Vector3d(0.15, 0, 0.2));
 
     auto camera = builder.AddSystem<drake::systems::sensors::RgbdSensor>(
