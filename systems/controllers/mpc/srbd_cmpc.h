@@ -39,8 +39,7 @@ typedef struct SrbdMode {
 class SrbdCMPC : public drake::systems::LeafSystem<double> {
  public:
   SrbdCMPC(const multibody::SingleRigidBodyPlant& plant, double dt,
-           double swing_ft_height, bool traj,
-           bool used_with_finite_state_machine = true,
+           bool traj, bool used_with_finite_state_machine = true,
            bool use_com = false);
 
 
@@ -59,6 +58,7 @@ class SrbdCMPC : public drake::systems::LeafSystem<double> {
       const Eigen::VectorXd& xdes, const Eigen::MatrixXd& Q);
   void SetTerminalCost(const Eigen::MatrixXd& Qf);
   void AddInputRegularization(const Eigen::MatrixXd& R);
+  void AddFootPlacementRegularization(const Eigen::MatrixXd& W);
   void Build();
   void CheckProblemDefinition();
 
@@ -71,6 +71,12 @@ class SrbdCMPC : public drake::systems::LeafSystem<double> {
   }
   const drake::systems::InputPort<double>& get_x_des_input_port() const {
     return this->get_input_port(x_des_port_);
+  }
+  const drake::systems::InputPort<double>& get_warmstart_input_port() const {
+    return this->get_input_port(srb_warmstart_port_);
+  }
+  const drake::systems::InputPort<double>& get_foot_target_input_port() const {
+    return this->get_input_port(foot_target_port_);
   }
   const drake::systems::OutputPort<double>& get_traj_out_port() const {
     return this->get_output_port(traj_out_port_);
@@ -110,11 +116,6 @@ class SrbdCMPC : public drake::systems::LeafSystem<double> {
   void MakeInitialStateConstraint();
   void MakeCost();
 
-  Eigen::MatrixXd CalcSwingFootKnotPoints(
-      const Eigen::VectorXd& x,
-      const drake::solvers::MathematicalProgramResult& result,
-      double time_since_last_touchdown, int fsm_state) const;
-
   lcmt_saved_traj MakeLcmTrajFromSol(
       const drake::solvers::MathematicalProgramResult& result,
       double time, double time_since_last_touchdown,
@@ -128,6 +129,15 @@ class SrbdCMPC : public drake::systems::LeafSystem<double> {
   void UpdateDynamicsConstraints(
       const Eigen::VectorXd& x, int n_until_next_stance, int fsm_state) const;
   void UpdateKinematicConstraints(int n_until_stance, int fsm_state) const;
+  void UpdateFootPlacementCost(
+      int fsm_state,
+      const Eigen::VectorXd& up_next_stance_target,
+      const Eigen::VectorXd& on_deck_stance_target) const;
+  void SetInitialGuess(
+      int fsm_state, double timestamp,
+      const Eigen::VectorXd& up_next_stance_target,
+      const Eigen::VectorXd& on_deck_stance_target,
+      const drake::trajectories::Trajectory<double>& srb_traj) const;
 
   void CopyDiscreteDynamicsConstraint(
       const SrbdMode& mode, bool current_stance,
@@ -157,7 +167,6 @@ class SrbdCMPC : public drake::systems::LeafSystem<double> {
   const int nu_ = 4;
   const int kLinearDim_ = 3;
   const int kAngularDim_ = 3;
-  const double swing_ft_ht_;
   const double dt_;
   int nmodes_ = 0;
 
@@ -166,6 +175,8 @@ class SrbdCMPC : public drake::systems::LeafSystem<double> {
   int fsm_port_;
   int x_des_port_;
   int traj_out_port_;
+  int foot_target_port_;
+  int srb_warmstart_port_;
 
   // discrete update indices
   int current_fsm_state_idx_;
@@ -174,6 +185,7 @@ class SrbdCMPC : public drake::systems::LeafSystem<double> {
   // Problem variables
   Eigen::MatrixXd Q_;     // For running cost x^TQx
   Eigen::MatrixXd R_;     // For running cost u^TRu
+  Eigen::MatrixXd Wp_;    // regularizing cost on footstep location
   Eigen::MatrixXd Qf_;    // For terminal cost x_{T}^{T}Q_{f}x_{T}
   Eigen::Vector3d kin_bounds_;
   std::vector<SrbdMode> modes_;
@@ -191,6 +203,7 @@ class SrbdCMPC : public drake::systems::LeafSystem<double> {
   // Constraints
   std::vector<drake::solvers::QuadraticCost*> tracking_cost_;
   std::vector<drake::solvers::QuadraticCost*> input_cost_;
+  std::vector<drake::solvers::QuadraticCost*> foot_target_cost_;
   std::vector<drake::solvers::LinearConstraint*> friction_cone_;
   std::vector<drake::solvers::LinearEqualityConstraint*> terrain_angle_;
   drake::solvers::LinearEqualityConstraint* initial_state_;

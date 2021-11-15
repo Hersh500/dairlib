@@ -1,3 +1,4 @@
+#pragma once
 #include "drake/systems/primitives/linear_system.h"
 #include "drake/systems/framework/leaf_system.h"
 #include "drake/multibody/plant/multibody_plant.h"
@@ -6,7 +7,7 @@
 
 #include "systems/framework/output_vector.h"
 
-namespace dairlib::systems {
+namespace dairlib::systems::controllers {
 
 /// FiniteHorizonLqrSwingFootTrajGenerator generates a trajectory for the
 /// swing foot to determine the suitable swing foot acceleration in the xy
@@ -52,6 +53,8 @@ class FiniteHorizonLqrSwingFootTrajGenerator :
   const drake::systems::InputPort<double>& get_input_port_foot_target() const {
     return this->get_input_port(foot_target_port_);
   }
+
+  static drake::systems::LinearSystem<double> MakeDoubleIntegratorSystem();
 
  private:
 
@@ -104,7 +107,8 @@ class FiniteHorizonLqrSwingFootTrajGenerator :
   int foot_target_port_;
 
   // LQR parameters
-  Eigen::Matrix<double, 4, 4> Q_;
-  Eigen::Matrix<double, 2, 2> R_;
+  Eigen::Matrix<double, 4, 4> Q_ =  Eigen::Matrix4d::Identity();
+  Eigen::Matrix<double, 4, 4> Qf_ = 5 * Eigen::Matrix4d::Identity();
+  Eigen::Matrix<double, 2, 2> R_ = 0.1 * Eigen::Matrix2d::Identity();
 };
 }

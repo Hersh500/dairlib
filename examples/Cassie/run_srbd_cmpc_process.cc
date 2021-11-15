@@ -18,6 +18,8 @@
 #include "systems/dairlib_signal_lcm_systems.h"
 #include "systems/system_utils.h"
 #include "systems/controllers/mpc/srbd_cmpc.h"
+#include "systems/controllers/mpc/lipm_warmstart_system.h"
+#include "systems/controllers/fsm_event_time.h"
 #include "multibody/single_rigid_body_plant.h"
 #include "examples/Cassie/mpc/cassie_srbd_cmpc_gains.h"
 #include "examples/Cassie/cassie_utils.h"
@@ -32,6 +34,8 @@ using systems::RobotOutputReceiver;
 using systems::TimeBasedFiniteStateMachine;
 using systems::LcmDrivenLoop;
 using systems::OutputVector;
+using systems::LipmWarmStartSystem;
+using systems::FiniteStateMachineEventTime;
 using multibody::SingleRigidBodyPlant;
 
 
@@ -57,16 +61,15 @@ DEFINE_string(gains_filename, "examples/Cassie/mpc/cassie_srbd_cmpc_gains.yaml",
 DEFINE_string(channel_x, "CASSIE_STATE_SIMULATION", "channel to publish/receive cassie state");
 DEFINE_string(channel_plan, "SRBD_MPC_OUT", "channel to publish plan trajectory");
 DEFINE_string(channel_fsm, "FSM", "the name of the channel with the time-based fsm");
-DEFINE_double(stance_time, 0.3, "duration of each stance phase");
+DEFINE_double(stance_time, 0.35, "duration of each stance phase");
 DEFINE_bool(debug_mode, false, "Manually set MPC values to debug");
 DEFINE_bool(use_com, false, "Use center of mass or a point to track CM location");
 DEFINE_bool(print_diagram, false, "print block diagram");
 DEFINE_double(debug_time, 0.00, "time to simulate system at");
-DEFINE_double(swing_ft_height, 0.01, "Swing foot height");
 DEFINE_double(stance_width, 0.0, "stance width to use in dynamics linearization");
-DEFINE_double(v_des, 0.4, "desired walking speed");
-DEFINE_double(h_des, 0.75, "Desired pelvis height");
-DEFINE_double(dt, 0.01, "time step for koopman mpc");
+DEFINE_double(v_des, 0.0, "desired walking speed");
+DEFINE_double(h_des, 0.82, "Desired pelvis height");
+DEFINE_double(dt, 0.01, "time step for srbd mpc");
 
 int DoMain(int argc, char* argv[]) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -99,8 +102,8 @@ int DoMain(int argc, char* argv[]) {
   Vector3d left_safe_nominal_foot_pos = {0, 0.125, 0};
   Vector3d right_neutral_foot_pos = -left_neutral_foot_pos;
   Vector3d right_safe_nominal_foot_pos = -left_safe_nominal_foot_pos;
-  Matrix3d I_rot = Vector3d(0.91, 0.55, 0.89).asDiagonal();
-//  I_rot << 0.91, 0.04, 0.09, 0.04, 0.55, -0.001, 0.08, -0.001, 0.89;
+  Matrix3d I_rot; // = Vector3d(0.91, 0.55, 0.89).asDiagonal();
+  I_rot << 0.91, 0.04, 0.09, 0.04, 0.55, -0.001, 0.08, -0.001, 0.89;
 
   double mass = 30.0218;
   srb_plant.AddBaseFrame("pelvis", com_offset);
@@ -137,9 +140,9 @@ int DoMain(int argc, char* argv[]) {
   LinearSrbdDynamics left_stance_dynamics = {Al, Bl, bl};
   LinearSrbdDynamics right_stance_dynamics = {Ar, Br, br};
 
-  auto cmpc = builder.AddSystem<SrbdCMPC>(srb_plant, dt,
-                                          FLAGS_swing_ft_height,
-                                          false, true,  FLAGS_use_com);
+
+  auto cmpc = builder.AddSystem<SrbdCMPC>(
+      srb_plant, dt, false, true,  FLAGS_use_com);
   std::vector<VectorXd> kin_nom =
       {left_safe_nominal_foot_pos - des_com_pos,
        right_safe_nominal_foot_pos - des_com_pos};
@@ -161,6 +164,7 @@ int DoMain(int argc, char* argv[]) {
   cmpc->AddTrackingObjective(x_des, gains.q.asDiagonal());
   cmpc->SetTerminalCost(gains.qf.asDiagonal());
   cmpc->AddInputRegularization(gains.r.asDiagonal());
+  cmpc->AddFootPlacementRegularization(0 * Eigen::Matrix3d::Identity());
 
   // set friction coeff
   cmpc->SetMu(gains.mu);
@@ -171,15 +175,23 @@ int DoMain(int argc, char* argv[]) {
   builder.Connect(xdes_source->get_output_port(), cmpc->get_x_des_input_port());
 
   std::vector<int> fsm_states = {BipedStance::kLeft, BipedStance::kRight};
+  std::vector<BipedStance> fsm_stances = {BipedStance::kLeft, BipedStance::kRight};
   std::vector<double> state_durations = {FLAGS_stance_time, FLAGS_stance_time};
 
   auto fsm = builder.AddSystem<TimeBasedFiniteStateMachine>(
       plant, fsm_states, state_durations);
 
+  auto warmstarter = builder.AddSystem<LipmWarmStartSystem>(
+      srb_plant, FLAGS_h_des, FLAGS_stance_time,
+      FLAGS_dt, fsm_states, fsm_stances);
+
+  auto liftoff_event_time =
+      builder.AddSystem<FiniteStateMachineEventTime>(plant, fsm_states);
+
   std::vector<std::string> signals = {"fsm"};
-  auto fsm_send = builder.AddSystem<DrakeSignalSender>(signals, FLAGS_stance_time * 2);
-  auto fsm_pub = builder.AddSystem(
-      LcmPublisherSystem::Make<lcmt_dairlib_signal>(FLAGS_channel_fsm, &lcm_local));
+//  auto fsm_send = builder.AddSystem<DrakeSignalSender>(signals, FLAGS_stance_time * 2);
+//  auto fsm_pub = builder.AddSystem(
+//      LcmPublisherSystem::Make<lcmt_dairlib_signal>(FLAGS_channel_fsm, &lcm_local));
 
 
   // setup lcm messaging
@@ -188,13 +200,28 @@ int DoMain(int argc, char* argv[]) {
       LcmPublisherSystem::Make<lcmt_saved_traj>(FLAGS_channel_plan, &lcm_local));
 
   // fsm connections
-  builder.Connect(fsm->get_output_port(), cmpc->get_fsm_input_port());
-  builder.Connect(fsm->get_output_port(), fsm_send->get_input_port());
-  builder.Connect(fsm_send->get_output_port(), fsm_pub->get_input_port());
+  //  builder.Connect(fsm->get_output_port(), fsm_send->get_input_port());
+  //  builder.Connect(fsm_send->get_output_port(), fsm_pub->get_input_port());
 
+  builder.Connect(fsm->get_output_port(), cmpc->get_fsm_input_port());
+  builder.Connect(fsm->get_output_port(), warmstarter->get_input_port_fsm());
+  builder.Connect(fsm->get_output_port(),
+                  liftoff_event_time->get_input_port_fsm());
+  builder.Connect(robot_out->get_output_port(),
+                  liftoff_event_time->get_input_port_state());
   builder.Connect(robot_out->get_output_port(), fsm->get_input_port_state());
+  builder.Connect(robot_out->get_output_port(), warmstarter->get_input_port_state());
   builder.Connect(robot_out->get_output_port(),
                   cmpc->get_state_input_port());
+  builder.Connect(liftoff_event_time->get_output_port_event_time(),
+                  warmstarter->get_input_port_touchdown_time());
+  builder.Connect(xdes_source->get_output_port(),
+                  warmstarter->get_xdes_input_port());
+  builder.Connect(warmstarter->get_output_port_lipm_from_current(),
+                  cmpc->get_warmstart_input_port());
+  builder.Connect(warmstarter->get_output_port_foot_target(),
+                  cmpc->get_foot_target_input_port());
+
   builder.Connect(cmpc->get_output_port(), mpc_out_publisher->get_input_port());
 
   auto owned_diagram = builder.Build();
