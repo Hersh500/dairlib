@@ -612,6 +612,21 @@ cc_library(
     ],
 )
 
+py_library(
+    name = "policies",
+    srcs = ["policies.py"],
+)
+
+py_binary(
+    name = "td3",
+    srcs = ["td3.py"],
+    main = "td3.py",
+    deps = [
+        "//examples/Cassie:cassie_joy_env",
+        "//examples/Cassie:policies",
+    ],
+)
+
 py_binary(
     name = "state_receiver",
     srcs = ["state_receiver.py"],

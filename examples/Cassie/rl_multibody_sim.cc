@@ -119,7 +119,7 @@ int do_main_test(int argc, char* argv[]) {
 
   std::pair<double, double> x_lims(0.5, 4);
   std::pair<double, double> y_lims(-3, 3);
-  generateRandomObstacles(&plant, x_lims, y_lims);
+//  generateRandomObstacles(&plant, x_lims, y_lims);
 //  generateRandomObstacles(scene_graph, x_lims, y_lims);
   std::string urdf;
   if (FLAGS_spring_model) {

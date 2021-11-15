@@ -54,15 +54,15 @@ MakeD415CameraModel(const std::string &renderer_name) {
 std::pair <drake::geometry::render::ColorRenderCamera,
         drake::geometry::render::DepthRenderCamera>
 MakeGenericCameraModel(const std::string &renderer_name) {
-    const int kHeight = 256;
-    const int kWidth = 256;
+    const int kHeight = 128;
+    const int kWidth = 128;
 
     // To pose the two sensors relative to the camera body, we'll assume X_BC = I,
     // and select a representative value for X_CD drawn from calibration to define
     // X_BD.
     drake::geometry::render::ColorRenderCamera color_camera{
             {renderer_name,
-             {kWidth, kHeight, 100, 100, 128, 128},
+             {kWidth, kHeight, 50, 50, 64, 64},
              {0.01, 10.0} /* clipping_range */,
              {} /* X_BC */},
             false};
@@ -72,7 +72,7 @@ MakeGenericCameraModel(const std::string &renderer_name) {
             Vector3d(0.015, -0.00019, -0.0001));
     drake::geometry::render::DepthRenderCamera depth_camera{
             {renderer_name,
-                    {kWidth, kHeight, 200, 200, 128, 128},
+                    {kWidth, kHeight, 100, 100, 64, 64},
                     {0.01, 10.0} /* clipping_range */,
                     X_BD},
             {0.1,   10.0} /* depth_range */};
