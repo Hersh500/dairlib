@@ -241,6 +241,5 @@ void RobotCommandSender::OutputCommand(
       input_msg->efforts[i] = command->GetAtIndex(i);
     }  }
 }
-
 }  // namespace systems
 }  // namespace dairlib

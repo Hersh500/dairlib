@@ -10,7 +10,6 @@
 #include "systems/framework/timestamped_vector.h"
 
 #include "drake/multibody/plant/multibody_plant.h"
-#include "drake/systems/framework/leaf_system.h"
 
 namespace dairlib {
 namespace systems {
@@ -111,6 +110,5 @@ class RobotCommandSender : public drake::systems::LeafSystem<double> {
   std::vector<std::string> ordered_actuator_names_;
   std::map<std::string, int> actuatorIndexMap_;
 };
-
 }  // namespace systems
 }  // namespace dairlib
