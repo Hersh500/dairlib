@@ -86,6 +86,7 @@ DEFINE_bool(make_srbd_approx, false, "modify plant to closer approximate single 
 
 DEFINE_uint32(ic_idx, 0, "index of initial condition in csv file");
 DEFINE_string(ic_fname, "examples/Cassie/cassie_initial_conditions.csv", "csv file where precomputed initial conditions are stored.");
+DEFINE_bool(gaps, false, "Whether or not to use gap terrains");
 
 // The purpose of this is for the simulator to not run independently of the learner;
 // ie. it will only timestep when it receives the appropriate stepping LCM message from the agent/controller.
@@ -104,28 +105,20 @@ int do_main_test(int argc, char* argv[]) {
   const double time_step = FLAGS_time_stepping ? FLAGS_dt : 0.0;
   MultibodyPlant<double>& plant = *builder.AddSystem<MultibodyPlant>(time_step);
 
-//  if (FLAGS_floating_base) {
-//    multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
-//  }
-  plant.RegisterAsSourceForSceneGraph(&scene_graph);
-
-//  Parser parser(&plant, &scene_graph);
-//  std::string terrain_name =
-//          FindResourceOrThrow("examples/impact_invariant_control/platform.urdf");
-////  std::string terrain_name = FindResourceOrThrow("examples/Cassie/terrains/stairs_arena/stair_test_arena.sdf");
-//  drake::multibody::ModelInstanceIndex i = parser.AddModelFromFile(terrain_name);
-//  Eigen::Vector3d offset;
-//  offset << 1, 0, 0.1;
-//  plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("body", i),
-//                   drake::math::RigidTransform<double>(offset));
+  if (FLAGS_floating_base && !FLAGS_gaps) {
+    multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
+  }
 
   std::pair<double, double> x_lims(0.5, 4);
   std::pair<double, double> y_lims(-3, 3);
   std::pair<double, double> gap_lims(0.1, 0.3);
-  generateRandomGaps(&plant, gap_lims);
+  if (FLAGS_gaps) {
+      plant.RegisterAsSourceForSceneGraph(&scene_graph);
+      generateRandomGaps(&plant, gap_lims);
+  } else {
+      generateRandomObstacles(&plant, x_lims, y_lims);
+  }
 
-//  generateRandomObstacles(&plant, x_lims, y_lims);
-//  generateRandomObstacles(scene_graph, x_lims, y_lims);
   std::string urdf;
   if (FLAGS_spring_model) {
     urdf = "examples/Cassie/urdf/cassie_v2.urdf";
