@@ -136,6 +136,7 @@ int do_main_test(int argc, char* argv[]) {
 
   // Create lcm systems.
   auto lcm = builder.AddSystem<drake::systems::lcm::LcmInterfaceSystem>();
+//  auto lcm = drake::lcm::DrakeLcm();
   auto input_sub =
       builder.AddSystem(LcmSubscriberSystem::Make<dairlib::lcmt_robot_input>(
           FLAGS_channel_u, lcm));
@@ -203,7 +204,7 @@ int do_main_test(int argc, char* argv[]) {
     camera::MakeGenericCameraModel(renderer_name);
     const std::optional<drake::geometry::FrameId> parent_body_id =
             plant.GetBodyFrameIdIfExists(plant.GetFrameByName("pelvis").body().index());
-    drake::math::RigidTransform<double> cam_transform = drake::math::RigidTransform<double>(drake::math::RollPitchYaw<double>(-2.4, 0.0, -1.5),
+    drake::math::RigidTransform<double> cam_transform = drake::math::RigidTransform<double>(drake::math::RollPitchYaw<double>(-2.4, 0.0, -1.57),
             Eigen::Vector3d(0.15, 0, 0.2));
 
     auto camera = builder.AddSystem<drake::systems::sensors::RgbdSensor>(
@@ -240,31 +241,11 @@ int do_main_test(int argc, char* argv[]) {
 
   // Set initial conditions of the simulation
   VectorXd q_init, u_init, lambda_init, v_init;
-  double mu_fp = 0;
-  double min_normal_fp = 70;
 
   // read the matrix and get the initial conditions
   MatrixXd initial_conds = readCSV(FLAGS_ic_fname);
   q_init = initial_conds.block(0, FLAGS_ic_idx, 23,1);
   v_init = initial_conds.block(23, FLAGS_ic_idx, 22, 1);
-
-  // Create a plant for CassieFixedPointSolver.
-  // Note that we cannot use the plant from the above diagram, because after the
-  // diagram is built, plant.get_actuation_input_port().HasValue(*context)
-  // throws a segfault error
-//  drake::multibody::MultibodyPlant<double> plant_for_solver(0.0);
-//  addCassieMultibody(&plant_for_solver, nullptr,
-//                     FLAGS_floating_base /*floating base*/, urdf,
-//                     FLAGS_spring_model, true);
-//  plant_for_solver.Finalize();
-//  if (FLAGS_floating_base) {
-//    CassieFixedPointSolver(plant_for_solver, FLAGS_init_height, mu_fp,
-//                           min_normal_fp, true, FLAGS_toe_spread, &q_init, &u_init,
-//                           &lambda_init);
-//  } else {
-//    CassieFixedBaseFixedPointSolver(plant_for_solver, &q_init, &u_init,
-//                                    &lambda_init);
-//  }
 
   if (FLAGS_make_srbd_approx) {
     std::vector<std::string> links = {"yaw_left", "yaw_right", "hip_left", "hip_right",
@@ -280,8 +261,8 @@ int do_main_test(int argc, char* argv[]) {
   }
 
   plant.SetPositions(&plant_context, q_init);
-//  plant.SetVelocities(&plant_context, VectorXd::Zero(plant.num_velocities()));
   plant.SetVelocities(&plant_context, v_init);
+
   // Currently doesn't build because of lcm_local (copied from run_osc_standing_controller)
   // replacing with &lcm doesn't work.
 //  systems::LcmDrivenLoop<dairlib::lcmt_robot_output> loop(

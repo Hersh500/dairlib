@@ -1,0 +1,6 @@
+package dairlib;
+
+// Just a message to manually timestep the RL multibody simulation until utime.
+struct lcmt_rl_step {
+    int64_t utime;
+}

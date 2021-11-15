@@ -16,6 +16,18 @@ cc_library(
 )
 
 cc_library(
+    name = "srbd_residual_estimator",
+    srcs = ["srbd_residual_estimator.cc"],
+    hdrs = [
+        "srbd_residual_estimator.h",
+    ],
+    deps = [
+        "@drake//:drake_shared_library",
+        "@lcm",
+    ],
+)
+
+cc_library(
     name = "vector_scope",
     srcs = ["vector_scope.cc"],
     hdrs = ["vector_scope.h"],
