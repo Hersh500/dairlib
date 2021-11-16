@@ -12,7 +12,7 @@
 #include "drake/systems/framework/leaf_system.h"
 #include "drake/solvers/mathematical_program.h"
 #include "drake/solvers/osqp_solver.h"
-#include "drake/solvers/gurobi_solver.h"
+//#include "drake/solvers/gurobi_solver.h"
 #include "drake/solvers/solve.h"
 
 #include "lcm/lcm_trajectory.h"

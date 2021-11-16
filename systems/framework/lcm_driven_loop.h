@@ -148,7 +148,57 @@ class LcmDrivenLoop {
     return simulator_->get_mutable_context();
   }
 
-  // Start simulating the diagram
+  // Used to make rl_multibody_sim work
+  LcmDrivenLoop(drake::lcm::DrakeLcm* drake_lcm,
+                std::unique_ptr<drake::systems::Diagram<double>> diagram,
+                std::unique_ptr<drake::systems::Context<double>> context,
+                const drake::systems::LeafSystem<double>* lcm_parser,
+                std::vector<std::string> input_channels,
+                const std::string& active_channel,
+                const std::string& switch_channel, bool is_forced_publish)
+      : drake_lcm_(drake_lcm),
+        lcm_parser_(lcm_parser),
+        is_forced_publish_(is_forced_publish) {
+
+    // Move simulator
+    if (!diagram->get_name().empty()) {
+      diagram_name_ = diagram->get_name();
+    }
+    diagram_ptr_ = diagram.get();
+    simulator_ =
+            std::make_unique<drake::systems::Simulator<double>>(std::move(diagram), std::move(context));
+    simulator_->set_publish_at_initialization(false);
+    simulator_->Initialize();
+    // Create subscriber for the switch (in the case of multi-input)
+    DRAKE_DEMAND(!input_channels.empty());
+    if (input_channels.size() > 1) {
+      DRAKE_DEMAND(!switch_channel.empty());
+      switch_sub_ = std::make_unique<drake::lcm::Subscriber<SwitchMessageType>>(
+              drake_lcm_, switch_channel);
+    }
+
+    // Create subscribers for inputs
+    for (const auto& name : input_channels) {
+      std::cout << "Constructing subscriber for " << name << std::endl;
+      name_to_input_sub_map_.insert(std::make_pair(
+              name, drake::lcm::Subscriber<InputMessageType>(drake_lcm_, name)));
+    }
+
+    // Make sure input_channels contains active_channel, and then set initial
+    // active channel
+    bool is_name_match = false;
+    for (const auto& name : input_channels) {
+      if (name.compare(active_channel) == 0) {
+        is_name_match = true;
+        break;
+      }
+    }
+    DRAKE_DEMAND(is_name_match);
+
+    active_channel_ = active_channel;
+  }
+
+    // Start simulating the diagram
   void Simulate(double end_time = std::numeric_limits<double>::infinity()) {
     // Get mutable contexts
     auto& diagram_context = simulator_->get_mutable_context();
@@ -159,6 +209,7 @@ class LcmDrivenLoop {
       return name_to_input_sub_map_.at(active_channel_).count() > 0;
     });
 
+
     // Initialize the context time.
     const double t0 =
         name_to_input_sub_map_.at(active_channel_).message().utime * 1e-6;
@@ -168,6 +219,9 @@ class LcmDrivenLoop {
     double time = 0;  // initialize the current time with 0
     // Variable needed for the driven loop
     std::string previous_active_channel_name = active_channel_;
+
+      simulator_->set_publish_at_initialization(false);
+      simulator_->Initialize();
 
     // Run the simulation until end_time
     /// Structure of the code:

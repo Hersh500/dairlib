@@ -32,13 +32,17 @@ private:
     int B_hat_port_;
     int b_hat_port_;
 
-    // keep this plant to use its utility functions
+    // keep this plant to use its utility functions like getting the dynamics, etc.
     const multibody::SingleRigidBodyPlant& plant_;
 
     // Solves the Least Squares Problem, connects matrices to outputs
     drake::systems::EventStatus PeriodicUpdate(
             const drake::systems::Context<double> &context,
-            drake::systems::DiscreteValues<double>* discrete_state);
+            drake::systems::DiscreteValues<double>* discrete_state) const;
+
+    drake::systems::EventStatus DiscreteVariableUpdate(
+            const drake::systems::Context<double>& context,
+            drake::systems::DiscreteValues<double>* discrete_state) const;
 
 };
 

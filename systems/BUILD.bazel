@@ -22,6 +22,7 @@ cc_library(
         "srbd_residual_estimator.h",
     ],
     deps = [
+        "//multibody:single_rigid_body_plant",
         "@drake//:drake_shared_library",
         "@lcm",
     ],

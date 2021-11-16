@@ -7,6 +7,7 @@
 #include "common/file_utils.h"
 #include "dairlib/lcmt_cassie_out.hpp"
 #include "dairlib/lcmt_robot_output.hpp"
+#include "dairlib/lcmt_rl_step.hpp"
 #include "examples/Cassie/cassie_utils.h"
 #include "multibody/multibody_utils.h"
 #include "systems/primitives/subvector_pass_through.h"
@@ -29,6 +30,7 @@
 #include "drake/systems/primitives/discrete_time_delay.h"
 #include "drake/systems/sensors/rgbd_sensor.h"
 #include "drake/systems/sensors/image_to_lcm_image_array_t.h"
+#include "systems/framework/lcm_driven_loop.h"
 
 namespace dairlib {
 using dairlib::systems::SubvectorPassThrough;
@@ -136,7 +138,8 @@ int do_main_test(int argc, char* argv[]) {
 
   // Create lcm systems.
   auto lcm = builder.AddSystem<drake::systems::lcm::LcmInterfaceSystem>();
-//  auto lcm = drake::lcm::DrakeLcm();
+  auto drake_lcm = drake::lcm::DrakeLcm();
+
   auto input_sub =
       builder.AddSystem(LcmSubscriberSystem::Make<dairlib::lcmt_robot_input>(
           FLAGS_channel_u, lcm));
@@ -172,6 +175,7 @@ int do_main_test(int argc, char* argv[]) {
   auto sensor_pub =
       builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_cassie_out>(
           "CASSIE_OUTPUT", lcm, 1.0 / FLAGS_publish_rate));
+
 
   // connect leaf systems
   builder.Connect(*input_sub, *input_receiver);
@@ -262,28 +266,31 @@ int do_main_test(int argc, char* argv[]) {
 
   plant.SetPositions(&plant_context, q_init);
   plant.SetVelocities(&plant_context, v_init);
+  // Doesn't initialize the simulator for some reason...
+  systems::LcmDrivenLoop<dairlib::lcmt_rl_step> loop(
+      &drake_lcm, std::move(diagram),
+      std::move(diagram_context), nullptr,
+      std::vector<std::string>(1, "LEARNER_STEP_SIM"),
+      "LEARNER_STEP_SIM", "", true);
 
-  // Currently doesn't build because of lcm_local (copied from run_osc_standing_controller)
-  // replacing with &lcm doesn't work.
-//  systems::LcmDrivenLoop<dairlib::lcmt_robot_output> loop(
-//      &lcm_local, std::move(diagram), input_receiver, FLAGS_channel_u,
-//      true);
+  loop.Simulate();
 
-  Simulator<double> simulator(*diagram, std::move(diagram_context));
+//  Simulator<double> simulator(*diagram, std::move(diagram_context));
+//  Simulator<double> simulator(*diagram);
 
-  if (!FLAGS_time_stepping) {
-    // simulator.get_mutable_integrator()->set_maximum_step_size(0.01);
-    // simulator.get_mutable_integrator()->set_target_accuracy(1e-1);
-    // simulator.get_mutable_integrator()->set_fixed_step_mode(true);
-    simulator.reset_integrator<drake::systems::RungeKutta2Integrator<double>>(
-        FLAGS_dt);
-  }
-
-  simulator.set_publish_every_time_step(false);
-  simulator.set_publish_at_initialization(false);
-  simulator.set_target_realtime_rate(FLAGS_target_realtime_rate);
-  simulator.Initialize();
-  simulator.AdvanceTo(FLAGS_end_time);
+//  if (!FLAGS_time_stepping) {
+//    // simulator.get_mutable_integrator()->set_maximum_step_size(0.01);
+//    // simulator.get_mutable_integrator()->set_target_accuracy(1e-1);
+//    // simulator.get_mutable_integrator()->set_fixed_step_mode(true);
+//    simulator.reset_integrator<drake::systems::RungeKutta2Integrator<double>>(
+//        FLAGS_dt);
+//  }
+//
+//  simulator.set_publish_every_time_step(false);
+//  simulator.set_publish_at_initialization(false);
+//  simulator.set_target_realtime_rate(FLAGS_target_realtime_rate);
+//  simulator.Initialize();
+//  simulator.AdvanceTo(FLAGS_end_time);
 
   return 0;
 }

@@ -1,6 +1,6 @@
 # https://lcm-proj.github.io/tut_python.html
 import lcm
-from dairlib import lcmt_robot_output, lcmt_radio_out, lcmt_image_array, lcmt_image
+from dairlib import lcmt_robot_output, lcmt_radio_out, lcmt_image_array, lcmt_image, lcmt_rl_step
 import subprocess as sp
 import gym
 from gym import spaces 
@@ -43,6 +43,7 @@ class CassieEnv_Joystick(gym.Env):
         self.state_channel = state_channel
         self.pos_names = ['base_qw', 'base_qx', 'base_qy', 'base_qz', 'base_x', 'base_y', 'base_z', 'hip_roll_left', 'hip_roll_right', 'hip_yaw_left', 'hip_yaw_right', 'hip_pitch_left', 'hip_pitch_right', 'knee_left', 'knee_right', 'knee_joint_left', 'knee_joint_right', 'ankle_joint_left', 'ankle_joint_right', 'ankle_spring_joint_left', 'toe_left', 'ankle_spring_joint_right', 'toe_right']
         self.ctrlr_options = ["--use_radio=1", "--cassie_out_channel=CASSIE_OUTPUT", "--channel_x="+self.state_channel]
+        self.sim_ticks = 0
 
         ### Setting RL variables ###
         self.workspace = workspace
@@ -71,6 +72,8 @@ class CassieEnv_Joystick(gym.Env):
     # receives and handles the robot state
     def state_handler(self, channel, data):
         msg = lcmt_robot_output.decode(data)
+        self.sim_ticks = msg.utime  # potential thread safety issues here.
+
         # com angle, trans. pos, ang vel, trans. vel
         state = np.array(list(msg.position[0:7]) + list(msg.velocity[0:6]))
         self.state_queue.put(state)
@@ -97,7 +100,7 @@ class CassieEnv_Joystick(gym.Env):
             self.lc.handle() 
             if self.stop_listener.is_set():
                 break
-            time.sleep(0.01)
+            time.sleep(0.001)
 
 
     def set_goal(self, x_des, y_des):
@@ -141,11 +144,14 @@ class CassieEnv_Joystick(gym.Env):
         # send LCM message with the desired action
         self.lc.publish(self.action_channel, action_msg.encode())
         print("published action", action)
+        step_msg = lcmt_rl_step()
+        step_msg.utime = int(self.sim_ticks + 1/self.rate * 1e6)
+        self.lc.publish("LEARNER_STEP_SIM", step_msg.encode())
 
         # wait and get the last LCM message with the desired robot state
         # have to do this because the sim is running in real time
         # TODO: can this run faster than real time to get more training in?
-        time.sleep(1/self.rate)
+        # time.sleep(1/self.rate)
 
         '''
         while self.state_queue.qsize() < 1:
@@ -194,20 +200,27 @@ class CassieEnv_Joystick(gym.Env):
         self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--ic_idx=" + str(ic_idx)])
         time.sleep(1)
 
+
         if self.stop_listener.is_set():
             self.stop_listener.clear()
 
         self.listener_thread = threading.Thread(target=self.lcm_listener)
         self.listener_thread.start()
 
+        # start the lcm driven loop
+        self.sim_ticks = 0e6
+        step_msg = lcmt_rl_step()
+        step_msg.utime = int(0)
+        self.lc.publish("LEARNER_STEP_SIM", step_msg.encode())
+
+        '''
+        self.sim_ticks = 1e6  # force it to initialize
+        step_msg = lcmt_rl_step()
+        step_msg.utime = int(self.sim_ticks + 1/self.rate * 1e6)
+        self.lc.publish("LEARNER_STEP_SIM", step_msg.encode())
+        '''
 
         self.ep_timesteps = 0
-        '''
-        while self.state_queue.qsize() < 1:
-            self.lc.handle()
-        while self.image_queue.qsize() < 1:
-            self.lc.handle()
-        '''
         dyn_state = self.state_queue.get(block=True)
         image = self.image_queue.get(block=True)
         base_orientation = R.from_quat(dyn_state[0:4]).as_euler("zyx")[0]
@@ -228,7 +241,6 @@ class CassieEnv_Joystick(gym.Env):
             self.ctrlr.terminate()
             self.ctrlr = None
         if not self.stop_listener.is_set():
-            time.sleep(3)  # ... clear out the LCM buffer?
             self.stop_listener.set()
         
     def kill_director(self):
@@ -240,9 +252,13 @@ def main():
         workspace = [[-1, 5], [-3, 3], [0.5, 1.3]]
         env = CassieEnv_Joystick("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_SIMULATION", 10, workspace)
         s = env.reset()
-        s, r, d = env.step([0.0, 0, 0, 0])  # just to see what happens
-        print('exited step')
-        time.sleep(90)
+        i = 0
+        while i < 1000: 
+            s, r, d = env.step([0.0, 0, 0, 0])  # just to see what happens
+            i += 1
+
+        # print('exited step')
+        # time.sleep(90)
         # TODO: figure out how to detect when the controller terminates
         env.kill_procs()
         env.kill_director()
