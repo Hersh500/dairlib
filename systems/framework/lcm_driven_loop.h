@@ -219,10 +219,7 @@ class LcmDrivenLoop {
     double time = 0;  // initialize the current time with 0
     // Variable needed for the driven loop
     std::string previous_active_channel_name = active_channel_;
-
-      simulator_->set_publish_at_initialization(false);
-      simulator_->Initialize();
-
+    
     // Run the simulation until end_time
     /// Structure of the code:
     ///  While() {
