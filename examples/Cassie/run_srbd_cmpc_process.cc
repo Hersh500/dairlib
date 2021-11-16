@@ -102,8 +102,9 @@ int DoMain(int argc, char* argv[]) {
   Vector3d left_safe_nominal_foot_pos = {0, 0.125, 0};
   Vector3d right_neutral_foot_pos = -left_neutral_foot_pos;
   Vector3d right_safe_nominal_foot_pos = -left_safe_nominal_foot_pos;
-  Matrix3d I_rot; // = Vector3d(0.91, 0.55, 0.89).asDiagonal();
-  I_rot << 0.91, 0.04, 0.09, 0.04, 0.55, -0.001, 0.08, -0.001, 0.89;
+  Matrix3d I_rot = Vector3d(0.91, 0.55, 0.89).asDiagonal();
+//  I_rot << 0.91, 0.04, 0.09, 0.04, 0.55, -0.001, 0.08, -0.001, 0.89;
+  std::cout << "I:\n" << I_rot <<std::endl;
 
   double mass = 30.0218;
   srb_plant.AddBaseFrame("pelvis", com_offset);
@@ -158,13 +159,14 @@ int DoMain(int argc, char* argv[]) {
   // add tracking objective
   VectorXd x_des = VectorXd::Zero(nx);
   x_des(2) = des_com_pos(2);
-  x_des(3) = FLAGS_v_des;
+  x_des(6) = FLAGS_v_des;
+  std::cout << "xd:\n" << x_des << std::endl;
   MatrixXd qq = gains.q.asDiagonal();
 
   cmpc->AddTrackingObjective(x_des, gains.q.asDiagonal());
   cmpc->SetTerminalCost(gains.qf.asDiagonal());
   cmpc->AddInputRegularization(gains.r.asDiagonal());
-  cmpc->AddFootPlacementRegularization(0 * Eigen::Matrix3d::Identity());
+  cmpc->AddFootPlacementRegularization(Eigen::Matrix3d::Identity());
 
   // set friction coeff
   cmpc->SetMu(gains.mu);
