@@ -22,12 +22,7 @@ class TimeVisualizer(object):
         if (self._subscriber is not None):
             return
 
-        if 'pd_panel_state_channel' in globals():
-            channel = pd_panel_state_channel
-        elif "CASSIE_STATE_SIMULATION" in globals():
-            channel = "CASSIE_STATE_SIMULATION"
-        else:
-            channel = "PLANAR_STATE"
+        channel='CASSIE_STATE_SIMULATION'
 
 
         self._subscriber = lcmUtils.addSubscriber(
