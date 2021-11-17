@@ -50,9 +50,11 @@ class CassieEnv_Joystick(gym.Env):
         self.goal_state = [5, 5]
         self.done = False
         self.rate = rate
-        self.action_space = spaces.Box(low = np.array([-1, -1, -1, -1]), high = np.array([1, 1, 1, 1]))
-        self.state_dim = 5
         self.image_dim = (128, 128)
+        self.action_space = spaces.Box(low = np.array([-1, -1, -1, -1]), high = np.array([1, 1, 1, 1]))
+        # self.observation_space = spaces.Tuple(spaces.Box(low = np.array([-5, -5, -5, -5, -np.pi]), high = np.array([5, 5, 5, 5, np.pi])),
+                                              # spaces.Box(low = -1, high = 1, shape = self.image_dim))
+        self.state_dim = 5
         self._max_episode_steps = 300
         
         ### Loading up Cached Initial Conditions ###
@@ -151,7 +153,7 @@ class CassieEnv_Joystick(gym.Env):
         # wait and get the last LCM message with the desired robot state
         # have to do this because the sim is running in real time
         # TODO: can this run faster than real time to get more training in?
-        # time.sleep(1/self.rate)
+        time.sleep(1/self.rate)
 
         '''
         while self.state_queue.qsize() < 1:
@@ -163,6 +165,7 @@ class CassieEnv_Joystick(gym.Env):
         # get the next LCM message in the queue
         dyn_state = self.state_queue.get(block=True)
         image = self.image_queue.get(block=True)
+
         base_orientation = R.from_quat(dyn_state[0:4]).as_euler("zyx")[0]
         state_reduced = np.array([dyn_state[self.pos_names.index("base_x")],
                                   dyn_state[self.pos_names.index("base_y")],
@@ -244,7 +247,8 @@ class CassieEnv_Joystick(gym.Env):
             self.stop_listener.set()
         
     def kill_director(self):
-        self.drake_director.terminate()
+        if self.drake_director is not None:
+            self.drake_director.terminate()
 
 
 def main():
@@ -256,6 +260,7 @@ def main():
         while i < 1000: 
             s, r, d = env.step([0.0, 0, 0, 0])  # just to see what happens
             i += 1
+            time.sleep(0.05)
 
         # print('exited step')
         # time.sleep(90)

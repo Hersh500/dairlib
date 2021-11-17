@@ -61,19 +61,23 @@ class TD3(object):
         noise_clip=0.5,
         policy_freq=2):
 
-        state_enc_pi = policies.StateEncoder(policies.VisionFrontend2D(image_dim),
+        vision_encoder = policies.VisionFrontend2D(image_dim)
+        state_enc_pi = policies.StateEncoder(vision_encoder,
                                              state_dim,
                                              state_encoding_dim = 32,
-                                             output_dim = 64) 
+                                             output_dim = 64)
         self.actor = policies.Actor_TD3(state_enc_pi, action_dim).to(device)
         self.actor_target = copy.deepcopy(self.actor).to(device)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr = 1e-4)
-
-        state_enc_q1 = policies.StateEncoder(policies.VisionFrontend2D(image_dim),
+        state_enc_q1 = policies.StateEncoder(vision_encoder,
                                              state_dim,
                                              state_encoding_dim = 32,
                                              output_dim = 64) 
-        state_enc_q2 = copy.deepcopy(state_enc_q1)
+
+        state_enc_q2 = policies.StateEncoder(vision_encoder,
+                                             state_dim,
+                                             state_encoding_dim = 32,
+                                             output_dim = 64) 
         self.critic = policies.Critic_TD3(state_enc_q1, state_enc_q2, action_dim).to(device)
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr = 1e-4)
@@ -173,7 +177,7 @@ def main():
     writer = SummaryWriter(log_dir = "./rl_logging/" + logdir)
 
     # define the hyperparameters
-    start_timesteps = 512
+    start_timesteps = 2000
     eval_freq = 2e3
     max_timesteps = 10000
     expl_noise = 0.3
@@ -245,9 +249,7 @@ def main():
             # Train agent after collecting sufficient data
             # TODO: is this fast enough for realtime?
             if t >= start_timesteps:
-                t0 = time.time()
                 policy.train(replay_buffer, batch_size)
-                t1 = time.time()
                 
 
             if done: 
