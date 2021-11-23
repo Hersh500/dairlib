@@ -177,9 +177,9 @@ def main():
     writer = SummaryWriter(log_dir = "./rl_logging/" + logdir)
 
     # define the hyperparameters
-    start_timesteps = 2000
-    eval_freq = 2e3
-    max_timesteps = 10000
+    start_timesteps = 1000
+    eval_freq = 1e3
+    max_timesteps = 20000
     expl_noise = 0.3
     batch_size = 128
     discount = 0.99 
@@ -249,7 +249,10 @@ def main():
             # Train agent after collecting sufficient data
             # TODO: is this fast enough for realtime?
             if t >= start_timesteps:
+                t0 = time.time()
                 policy.train(replay_buffer, batch_size)
+                t1 = time.time()
+                print("training time:", t1 - t0)
                 
 
             if done: 
@@ -257,7 +260,6 @@ def main():
                 print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
                 # Reset environment
                 state, done = env.reset(), False
-                print("RESET STATE:", state[0])
                 writer.add_scalar("Loss/training_reward", episode_reward, episode_num)
                 episode_reward = 0
                 episode_timesteps = 0
@@ -265,9 +267,9 @@ def main():
                 print("-----------On episode:", episode_num, "-----------")
 
             if (t + 1) % eval_freq == 0:
-                policy.save("./logging/" + logdir + "policy")
+                policy.save("./rl_logging/" + logdir + "policy")
                 if meta_info is not None:
-                    f = open("./logging/" + logdir + "info.txt", 'w')
+                    f = open("./rl_logging/" + logdir + "info.txt", 'w')
                     f.write(meta_info)
                     f.close()
 

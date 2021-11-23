@@ -1,4 +1,3 @@
-# https://lcm-proj.github.io/tut_python.html
 import lcm
 from dairlib import lcmt_robot_output, lcmt_radio_out, lcmt_image_array, lcmt_image, lcmt_rl_step
 import subprocess as sp
@@ -50,10 +49,11 @@ class CassieEnv_Joystick(gym.Env):
         self.goal_state = [5, 5]
         self.done = False
         self.rate = rate
-        self.image_dim = (128, 128)
+        self.image_dim = (1, 128, 128)
         self.action_space = spaces.Box(low = np.array([-1, -1, -1, -1]), high = np.array([1, 1, 1, 1]))
-        # self.observation_space = spaces.Tuple(spaces.Box(low = np.array([-5, -5, -5, -5, -np.pi]), high = np.array([5, 5, 5, 5, np.pi])),
-                                              # spaces.Box(low = -1, high = 1, shape = self.image_dim))
+        # TODO(hersh): this breaks the current td3 code.
+        self.observation_space = spaces.Dict({"position": spaces.Box(low = np.array([-5, -5, -5, -5, -np.pi]), high = np.array([5, 5, 5, 5, np.pi])),
+                                              "image": spaces.Box(low = -1, high = 1, shape = self.image_dim)})
         self.state_dim = 5
         self._max_episode_steps = 300
         
@@ -94,7 +94,7 @@ class CassieEnv_Joystick(gym.Env):
         image = np.array(image)
         image = image.astype(np.float32)
         image = image/2**16
-        self.image_queue.put(image)
+        self.image_queue.put(np.expand_dims(image, axis=0))
 
 
     def lcm_listener(self):
@@ -145,7 +145,7 @@ class CassieEnv_Joystick(gym.Env):
 
         # send LCM message with the desired action
         self.lc.publish(self.action_channel, action_msg.encode())
-        print("published action", action)
+        # print("published action", action)
         step_msg = lcmt_rl_step()
         step_msg.utime = int(self.sim_ticks + 1/self.rate * 1e6)
         self.lc.publish("LEARNER_STEP_SIM", step_msg.encode())
@@ -172,14 +172,14 @@ class CassieEnv_Joystick(gym.Env):
                                   self.goal_state[0],
                                   self.goal_state[1],
                                   base_orientation])
-        self.state = (state_reduced, image)
+        self.state = {"position":state_reduced, "image":image}
         reward = self.reward_fn(dyn_state)
         self.done = self.done_fn(dyn_state)
         self.ep_timesteps += 1
         if self.done:
             self.kill_procs()
-        print("got reward", reward)
-        return self.state, reward, self.done
+        # print("got reward", reward)
+        return self.state, reward, self.done, {}
 
 
     def reset(self):
@@ -200,7 +200,7 @@ class CassieEnv_Joystick(gym.Env):
         ic = self.all_ics[:,ic_idx]
         
         self.ctrlr = sp.Popen([self.bin_dir + self.controller_p] + self.ctrlr_options)
-        self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--ic_idx=" + str(ic_idx)])
+        self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--ic_idx=" + str(ic_idx), "--gaps=1"])
         time.sleep(1)
 
 
@@ -232,7 +232,8 @@ class CassieEnv_Joystick(gym.Env):
                                   self.goal_state[0],
                                   self.goal_state[1],
                                   base_orientation])
-        self.state = (state_reduced, image)
+        # self.state = (state_reduced, image)
+        self.state = {"position":state_reduced, "image":image}
         return self.state
 
 
@@ -257,13 +258,13 @@ def main():
         env = CassieEnv_Joystick("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_SIMULATION", 10, workspace)
         s = env.reset()
         i = 0
-        while i < 1000: 
-            s, r, d = env.step([0.0, 0, 0, 0])  # just to see what happens
+        while i < 10: 
+            s, r, d, _ = env.step([0.0, 0, 0, 0])  # just to see what happens
             i += 1
             time.sleep(0.05)
 
         # print('exited step')
-        # time.sleep(90)
+        time.sleep(90)
         # TODO: figure out how to detect when the controller terminates
         env.kill_procs()
         env.kill_director()

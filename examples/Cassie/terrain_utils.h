@@ -20,6 +20,9 @@ namespace dairlib {
 
     void generateRandomGaps(MultibodyPlant<double> *plant,
                             std::pair<double, double> gap_lims);
+
+    void generateRandomSteps(MultibodyPlant<double> *plant,
+                             std::pair<double, double> step_lims);
 }
 
 #endif //DAIRLIB_TERRAIN_UTILS_H

@@ -631,6 +631,15 @@ py_binary(
 )
 
 py_binary(
+    name = "ppo",
+    srcs = ["ppo.py"],
+    main = "ppo.py",
+    deps = [
+        "//examples/Cassie:cassie_joy_env",
+    ],
+)
+
+py_binary(
     name = "state_receiver",
     srcs = ["state_receiver.py"],
     data = [

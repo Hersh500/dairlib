@@ -114,9 +114,12 @@ int do_main_test(int argc, char* argv[]) {
   std::pair<double, double> x_lims(0.5, 4);
   std::pair<double, double> y_lims(-3, 3);
   std::pair<double, double> gap_lims(0.1, 0.3);
-  if (FLAGS_gaps) {
+  std::pair<double, double> step_lims(0.05, 0.1);
+
+      if (FLAGS_gaps) {
       plant.RegisterAsSourceForSceneGraph(&scene_graph);
-      generateRandomGaps(&plant, gap_lims);
+//      generateRandomGaps(&plant, gap_lims);
+    generateRandomSteps(&plant, step_lims);
   } else {
       generateRandomObstacles(&plant, x_lims, y_lims);
   }
