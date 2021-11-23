@@ -81,7 +81,7 @@ private:
     void UpdateLstSqEquation(Eigen::VectorXd state,
                              Eigen::VectorXd input,
                              Eigen::Vector3d stance_foot_loc,
-                             BipedStance stance_mode);
+                             BipedStance stance_mode) const;
 
     // Solve the least squares equation periodically
     void SolveLstSq() const;

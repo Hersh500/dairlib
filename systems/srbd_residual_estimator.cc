@@ -118,6 +118,8 @@ namespace dairlib {
       BipedStance cur_stance_mode = modes_.at(fsm_state(0)).stance;
 
       // TODO(hersh500): get the u by multiplying the jacobian with efforts, then selecting the appropriate column.
+      Eigen::VectorXd u = Eigen::VectorXd::Zero(nu_);
+
       UpdateLstSqEquation(srbd_state, u, foot_loc, cur_stance_mode);
       if (ticks_ < buffer_len_) {
         ticks_++;
@@ -127,7 +129,7 @@ namespace dairlib {
     void SRBDResidualEstimator::UpdateLstSqEquation(Eigen::VectorXd state,
                                                     Eigen::VectorXd input,
                                                     Eigen::Vector3d stance_foot_loc,
-                                                    BipedStance stance_mode) {
+                                                    BipedStance stance_mode) const {
       VectorXd vec_joined(nx_ + 3);
       vec_joined << state, stance_foot_loc;
 
