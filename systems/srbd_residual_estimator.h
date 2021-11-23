@@ -35,10 +35,14 @@ public:
             const LinearSrbdDynamics&  dynamics,
             BipedStance stance, const Eigen::MatrixXd& reset, int N);
 
-    unsigned int buffer_len_;
-    double rate_;
-
 private:
+    // keep this plant to use its utility functions like getting the dynamics, etc.
+    const multibody::SingleRigidBodyPlant& plant_;
+
+    double rate_;
+    unsigned int buffer_len_;
+
+
     // states from estimator get added to this, used to build least squares problem
     mutable Eigen::MatrixXd X_;
 
@@ -55,17 +59,13 @@ private:
     int nx_ = 12;
     int nu_ = 4;
     bool use_fsm_;
-    mutable int ticks_ = 0;
+    mutable unsigned int ticks_ = 0;
     std::vector<dairlib::SrbdMode> modes_;
     int nmodes_ = 0;
 
     // discrete update indices
     int current_fsm_state_idx_;
     int prev_event_time_idx_;
-
-
-    // keep this plant to use its utility functions like getting the dynamics, etc.
-    const multibody::SingleRigidBodyPlant& plant_;
 
     // Solves the Least Squares Problem, connects matrices to outputs
     drake::systems::EventStatus PeriodicUpdate(

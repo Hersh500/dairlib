@@ -12,9 +12,9 @@ using dairlib::systems::OutputVector;
 namespace dairlib {
     SRBDResidualEstimator::SRBDResidualEstimator(const multibody::SingleRigidBodyPlant &plant, double rate,
                                                  unsigned int buffer_len, bool use_fsm) :
-                                                 buffer_len_(buffer_len),
-                                                 rate_(rate),
                                                  plant_(plant),
+                                                 rate_(rate),
+                                                 buffer_len_(buffer_len),
                                                  use_fsm_(use_fsm) {
 
       // Initialize data matrices
@@ -79,6 +79,7 @@ namespace dairlib {
       if (ticks_ > buffer_len_) {
         SolveLstSq();
       }
+      return drake::systems::EventStatus::Succeeded();
     }
 
     // For now, calling this as a discrete variable update though it doesn't have to be.
@@ -124,6 +125,7 @@ namespace dairlib {
       if (ticks_ < buffer_len_) {
         ticks_++;
       }
+      return drake::systems::EventStatus::Succeeded();
     }
 
     void SRBDResidualEstimator::UpdateLstSqEquation(Eigen::VectorXd state,
