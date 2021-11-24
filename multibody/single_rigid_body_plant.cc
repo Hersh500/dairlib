@@ -194,4 +194,15 @@ void SingleRigidBodyPlant::CopyDiscreteLinearizedSrbDynamicsForMPC(
   *bd = b;
 }
 
+Eigen::Vector3d SingleRigidBodyPlant::CalcContactForce(const Eigen::VectorXd &joint_torques,
+                                                       const BipedStance &stance) const {
+  // Get the jacobian that converts from joint torques to translational velocity
+  Eigen::MatrixXd J;
+  auto contact_pt = contact_points_.at(stance);
+  plant_.CalcJacobianTranslationalVelocity(*plant_context_, JacobianWrtVariable::kV, contact_pt.second, contact_pt.first,
+                                    world_frame_, world_frame_, &J);
+  // Assuming joint torques are in the same order as the jacobian indices...
+  Eigen::VectorXd forces = J * joint_torques;
+  return forces;
+}
 } // <\dairlib::multibody>

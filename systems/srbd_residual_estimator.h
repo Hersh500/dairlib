@@ -38,10 +38,8 @@ public:
 private:
     // keep this plant to use its utility functions like getting the dynamics, etc.
     const multibody::SingleRigidBodyPlant& plant_;
-
     double rate_;
     unsigned int buffer_len_;
-
 
     // states from estimator get added to this, used to build least squares problem
     mutable Eigen::MatrixXd X_;

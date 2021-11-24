@@ -119,8 +119,7 @@ namespace dairlib {
       BipedStance cur_stance_mode = modes_.at(fsm_state(0)).stance;
 
       // TODO(hersh500): get the u by multiplying the jacobian with efforts, then selecting the appropriate column.
-      Eigen::VectorXd u = Eigen::VectorXd::Zero(nu_);
-
+      Eigen::VectorXd u = plant_.CalcContactForce(robot_output->GetEfforts(), cur_stance_mode);
       UpdateLstSqEquation(srbd_state, u, foot_loc, cur_stance_mode);
       if (ticks_ < buffer_len_) {
         ticks_++;

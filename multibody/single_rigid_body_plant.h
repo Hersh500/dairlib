@@ -34,6 +34,7 @@ namespace multibody {
     Eigen::VectorXd CalcSRBStateFromPlantState(const Eigen::VectorXd& x) const;
     std::vector<Eigen::Vector3d> CalcFootPositions(const Eigen::VectorXd& x) const;
     Eigen::Vector3d CalcFootPosition (const Eigen::VectorXd& x, const BipedStance& stance) const;
+    Eigen::Vector3d CalcContactForce(const Eigen::VectorXd& joint_torques, const BipedStance& stance) const;
 
     void CopyContinuousLinearized3dSrbDynamicsForMPC(
         double m, double yaw, BipedStance stance,
