@@ -25,6 +25,7 @@
 #include "examples/Cassie/cassie_utils.h"
 #include "examples/Cassie/cassie_fixed_point_solver.h"
 #include "systems/srbd_residual_estimator.h"
+#include "systems/controllers/mpc/mpc_trajectory_reciever.h"
 
 namespace dairlib {
 
@@ -200,6 +201,10 @@ int DoMain(int argc, char* argv[]) {
   auto mpc_out_publisher = builder.AddSystem(
       LcmPublisherSystem::Make<lcmt_saved_traj>(FLAGS_channel_plan, &lcm_local));
 
+//  auto mpc_processor = builder.AddSystem<MpcTrajectoryReceiver>(
+//          TrajectoryType::kCubicHermite, TrajectoryType::kCubicHermite, false);
+//  builder.Connect(cmpc->get_output_port(), mpc_processor->get_input_port());
+
   // Least squares estimator
   auto lstsq_sys = builder.AddSystem<SRBDResidualEstimator>(srb_plant, 0.1, 100, true);
   lstsq_sys->AddMode(left_stance_dynamics, BipedStance::kLeft,
@@ -209,6 +214,7 @@ int DoMain(int argc, char* argv[]) {
 
   builder.Connect(fsm->get_output_port(), lstsq_sys->get_fsm_input_port());
   builder.Connect(robot_out->get_output_port(), lstsq_sys->get_state_input_port());
+  builder.Connect(cmpc->get_output_port(), lstsq_sys->get_mpc_input_port());
 
   // fsm connections
   //  builder.Connect(fsm->get_output_port(), fsm_send->get_input_port());

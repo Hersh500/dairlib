@@ -4,6 +4,8 @@
 #include <iostream>
 #include "srbd_residual_estimator.h"
 #include "systems/framework/output_vector.h"
+#include "dairlib/lcmt_saved_traj.hpp"
+#include "lcm/lcm_trajectory.h"
 
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
@@ -27,6 +29,8 @@ SRBDResidualEstimator::SRBDResidualEstimator(const multibody::SingleRigidBodyPla
                   "x, u, t",
                   OutputVector<double>(plant_.nq(), plant_.nv(), plant_.nu()))
           .get_index();
+
+  mpc_in_port_ = this->DeclareAbstractInputPort("mpc_traj_input", drake::Value<lcmt_saved_traj>{}).get_index();
 
   A_hat_port_ = this->DeclareAbstractOutputPort("A_hat",
                                                 &SRBDResidualEstimator::GetAHat).get_index();
@@ -90,6 +94,11 @@ SRBDResidualEstimator::DiscreteVariableUpdate(const drake::systems::Context<doub
   const OutputVector<double> *robot_output =
           (OutputVector<double> *) this->EvalVectorInput(context, state_in_port_);
 
+  const drake::AbstractValue* mpc_cur_input = this->EvalAbstractInput(context, mpc_in_port_);
+  const auto& input_msg = mpc_cur_input->get_value<lcmt_saved_traj>();
+  LcmTrajectory lcm_traj(input_msg);
+  LcmTrajectory::Trajectory input_traj = lcm_traj.GetTrajectory("input_traj");
+
   double timestamp = robot_output->get_timestamp();
 
   // FSM stuff (copied from the srbd_mpc)
@@ -110,6 +119,10 @@ SRBDResidualEstimator::DiscreteVariableUpdate(const drake::systems::Context<doub
 
   // Full robot state
   VectorXd x = robot_output->GetState();
+  Eigen::VectorXd u_nom = Eigen::VectorXd::Zero(nu_);
+//  if (input_traj.datapoints.cols() > 0) {
+//    Eigen::VectorXd u_nom = input_traj.datapoints.col(0);
+//  }
 
   // Get the srbd state and foot state
   VectorXd srbd_state = plant_.CalcSRBStateFromPlantState(x);
@@ -120,9 +133,8 @@ SRBDResidualEstimator::DiscreteVariableUpdate(const drake::systems::Context<doub
   Eigen::Vector3d foot_loc = foot_locs[fsm_state(0)];
   BipedStance cur_stance_mode = modes_.at(fsm_state(0)).stance;
 
-  // Eigen::VectorXd u = plant_.CalcContactForce(robot_output->GetEfforts(), cur_stance_mode);
-  Eigen::VectorXd u = Eigen::VectorXd::Zero(nu_);
-  UpdateLstSqEquation(srbd_state, u, foot_loc, cur_stance_mode);
+  UpdateLstSqEquation(srbd_state, u_nom, foot_loc, cur_stance_mode);
+
   if (ticks_ < buffer_len_) {
     ticks_++;
   }
@@ -155,6 +167,7 @@ void SRBDResidualEstimator::UpdateLstSqEquation(Eigen::VectorXd state,
 
   // Add the current state to the 2nd to last row of Y, completing the temporary part.
   y_.row(buffer_len_ - 2) = y_.row(buffer_len_ - 2) + state;
+  std::cout << "calling least squares update, buffer size = " << ticks_ << std::endl;
 }
 
 void SRBDResidualEstimator::SolveLstSq() const {
@@ -168,6 +181,7 @@ void SRBDResidualEstimator::SolveLstSq() const {
   cur_A_hat_ = soln.block(0, 0, nx_, nx_ + 3);
   cur_B_hat_ = soln.block(0, nx_ + 3, nx_, nu_);
   cur_b_hat_ = soln.block(0, nx_ + nu_ + 3, nx_, 1);
+  std::cout << "#################################" << std::endl;
   std::cout << "Current b_hat " << cur_b_hat_ << std::endl;
 }
 

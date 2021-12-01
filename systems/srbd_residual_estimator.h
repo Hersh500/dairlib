@@ -5,7 +5,6 @@
 #ifndef DAIRLIB_SRBD_RESIDUAL_ESTIMATOR_H
 #define DAIRLIB_SRBD_RESIDUAL_ESTIMATOR_H
 #include "drake/systems/framework/leaf_system.h"
-#include "drake/solvers/mathematical_program.h"
 #include "systems/controllers/mpc/srbd_cmpc.h"
 #include "multibody/single_rigid_body_plant.h"
 
@@ -18,6 +17,10 @@ class SRBDResidualEstimator : public drake::systems::LeafSystem<double> {
         // Want to connect this to a callback that adds the state to a deque
         const drake::systems::InputPort<double> &get_state_input_port() const {
           return this->get_input_port(state_in_port_);
+        };
+
+        const drake::systems::InputPort<double> &get_mpc_input_port() const {
+          return this->get_input_port(mpc_in_port_);
         };
 
         const drake::systems::InputPort<double> &get_fsm_input_port() const {
@@ -58,7 +61,7 @@ class SRBDResidualEstimator : public drake::systems::LeafSystem<double> {
         // Output matrices
         mutable Eigen::MatrixXd cur_A_hat_, cur_B_hat_, cur_b_hat_;
 
-        int state_in_port_, A_hat_port_, B_hat_port_, b_hat_port_, fsm_port_;
+        int state_in_port_, A_hat_port_, B_hat_port_, b_hat_port_, fsm_port_, mpc_in_port_;
         int nx_ = 12;
         int nu_ = 4;
         bool use_fsm_;

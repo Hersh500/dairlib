@@ -22,8 +22,10 @@ cc_library(
         "srbd_residual_estimator.h",
     ],
     deps = [
+        "//lcmtypes:lcmt_robot",
         "//multibody:single_rigid_body_plant",
         "//systems/controllers:srbd_cmpc",
+        "//systems/controllers:mpc_trajectory_reciever",
         "@drake//:drake_shared_library",
         "@lcm",
     ],
