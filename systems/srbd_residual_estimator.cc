@@ -81,7 +81,8 @@ drake::systems::EventStatus SRBDResidualEstimator::PeriodicUpdate(
         const drake::systems::Context<double> &context,
         drake::systems::DiscreteValues<double> *discrete_state) const {
   // Solve least squares only if it's ready.
-  if (ticks_ > buffer_len_) {
+  std::cout << "CALLING LEAST SQUARES SOLVE with ticks = " << ticks_ << std::endl;
+  if (ticks_ >= buffer_len_) {
     SolveLstSq();
   }
   return drake::systems::EventStatus::Succeeded();
@@ -97,7 +98,13 @@ SRBDResidualEstimator::DiscreteVariableUpdate(const drake::systems::Context<doub
   const drake::AbstractValue* mpc_cur_input = this->EvalAbstractInput(context, mpc_in_port_);
   const auto& input_msg = mpc_cur_input->get_value<lcmt_saved_traj>();
   LcmTrajectory lcm_traj(input_msg);
-  LcmTrajectory::Trajectory input_traj = lcm_traj.GetTrajectory("input_traj");
+  Eigen::VectorXd u_nom;
+  if (lcm_traj.GetTrajectoryNames().size() > 0) {
+    LcmTrajectory::Trajectory input_traj = lcm_traj.GetTrajectory("input_traj");
+    u_nom = input_traj.datapoints.col(0);
+  } else {
+    u_nom = Eigen::VectorXd::Zero(nu_);
+  }
 
   double timestamp = robot_output->get_timestamp();
 
@@ -119,7 +126,7 @@ SRBDResidualEstimator::DiscreteVariableUpdate(const drake::systems::Context<doub
 
   // Full robot state
   VectorXd x = robot_output->GetState();
-  Eigen::VectorXd u_nom = Eigen::VectorXd::Zero(nu_);
+//  Eigen::VectorXd u_nom = Eigen::VectorXd::Zero(nu_);
 //  if (input_traj.datapoints.cols() > 0) {
 //    Eigen::VectorXd u_nom = input_traj.datapoints.col(0);
 //  }
@@ -167,7 +174,6 @@ void SRBDResidualEstimator::UpdateLstSqEquation(Eigen::VectorXd state,
 
   // Add the current state to the 2nd to last row of Y, completing the temporary part.
   y_.row(buffer_len_ - 2) = y_.row(buffer_len_ - 2) + state;
-  std::cout << "calling least squares update, buffer size = " << ticks_ << std::endl;
 }
 
 void SRBDResidualEstimator::SolveLstSq() const {
@@ -182,7 +188,7 @@ void SRBDResidualEstimator::SolveLstSq() const {
   cur_B_hat_ = soln.block(0, nx_ + 3, nx_, nu_);
   cur_b_hat_ = soln.block(0, nx_ + nu_ + 3, nx_, 1);
   std::cout << "#################################" << std::endl;
-  std::cout << "Current b_hat " << cur_b_hat_ << std::endl;
+  std::cout << "Current A_hat " << cur_A_hat_ << std::endl;
 }
 
 }

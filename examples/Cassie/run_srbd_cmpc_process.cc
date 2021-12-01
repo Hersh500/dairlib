@@ -206,7 +206,7 @@ int DoMain(int argc, char* argv[]) {
 //  builder.Connect(cmpc->get_output_port(), mpc_processor->get_input_port());
 
   // Least squares estimator
-  auto lstsq_sys = builder.AddSystem<SRBDResidualEstimator>(srb_plant, 0.1, 100, true);
+  auto lstsq_sys = builder.AddSystem<SRBDResidualEstimator>(srb_plant, 0.01, 200, true);
   lstsq_sys->AddMode(left_stance_dynamics, BipedStance::kLeft,
                 MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_time / dt));
   lstsq_sys->AddMode(right_stance_dynamics, BipedStance::kRight,
