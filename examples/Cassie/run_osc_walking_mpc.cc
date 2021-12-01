@@ -23,7 +23,7 @@
 #include "systems/controllers/osc/rpy_space_tracking_data.h"
 #include "systems/controllers/time_based_fsm.h"
 #include "systems/controllers/fsm_event_time.h"
-#include "systems/controllers/finite_horizon_lqr_swing_ft_traj_gen.h"
+#include "systems/controllers/target_swing_ft_traj_gen.h"
 #include "systems/framework/lcm_driven_loop.h"
 #include "systems/robot_lcm_systems.h"
 #include "systems/system_utils.h"
@@ -66,7 +66,7 @@ using systems::controllers::ComTrackingData;
 using systems::controllers::TransTaskSpaceTrackingData;
 using systems::controllers::JointSpaceTrackingData;
 using systems::controllers::RpyTaskSpaceTrackingData;
-using systems::controllers::FiniteHorizonLqrSwingFootTrajGenerator;
+using systems::controllers::TargetSwingFtTrajGen;
 using systems::controllers::SwingFootTajGenOptions;
 using systems::TimeBasedFiniteStateMachine;
 using systems::DairlibSignalReceiver;
@@ -82,7 +82,7 @@ DEFINE_string(mpc_channel, "SRBD_MPC_OUT", "channel to recieve koopman mpc messa
 DEFINE_string(
     gains_filename,
     "examples/Cassie/mpc/cassie_mpc_osc_walking_gains.yaml","Filepath containing gains");
-DEFINE_double(swing_ft_height, 0.01, "Swing foot height");
+DEFINE_double(swing_ft_height, 0.05, "Swing foot height");
 DEFINE_double(stance_duration, 0.35, "stance phase duration");
 DEFINE_double(double_stance_duration, 0.075, "double stance phase duration");
 DEFINE_bool(track_com, false,
@@ -133,8 +133,7 @@ int DoMain(int argc, char* argv[]) {
     std::vector<std::string> links = {"yaw_left", "yaw_right", "hip_left", "hip_right",
                                       "thigh_left", "thigh_right", "knee_left", "knee_right", "shin_left",
                                       "shin_right"};
-    drake::multibody::RotationalInertia I_rot(
-        0.91, 0.55, 0.89, 0.04, 0.09, -.001);
+    drake::multibody::RotationalInertia I_rot(0.91, 0.55, 0.89, 0.0, 0.0, 0.0);
     double mass = 30.0218;
 
     multibody::MakePlantApproximateRigidBody(plant_context.get(), plant_w_springs,
@@ -159,9 +158,7 @@ int DoMain(int argc, char* argv[]) {
   /**** Setup swing foot tracking options ****/
   SwingFootTajGenOptions swing_foot_taj_gen_options;
   swing_foot_taj_gen_options.mid_foot_height = FLAGS_swing_ft_height;
-  auto lsys =
-      FiniteHorizonLqrSwingFootTrajGenerator::MakeDoubleIntegratorSystem();
-  auto lsys_context = lsys.CreateDefaultContext();
+  swing_foot_taj_gen_options.desired_final_vertical_foot_velocity = -0.1;
 
   std::vector<std::pair<const Eigen::Vector3d,
                         const drake::multibody::Frame<double>&>>
@@ -196,11 +193,13 @@ int DoMain(int argc, char* argv[]) {
   int right_stance_state = BipedStance::kRight;
   int post_left_double_support_state = BipedStance::kLeft + 2;
   int post_right_double_support_state = BipedStance::kRight + 2;
-  double single_support_duration =
-      FLAGS_stance_duration - FLAGS_double_stance_duration;
+  double single_support_duration = FLAGS_is_double_stance ?
+      FLAGS_stance_duration - FLAGS_double_stance_duration :
+      FLAGS_stance_duration;
 
   vector<int> fsm_states;
   vector<double> state_durations;
+
   if (FLAGS_is_double_stance) {
     fsm_states = {left_stance_state, post_left_double_support_state,
                   right_stance_state, post_right_double_support_state};
@@ -222,8 +221,8 @@ int DoMain(int argc, char* argv[]) {
       builder.AddSystem<systems::FiniteStateMachineEventTime>(
           plant_w_springs, single_support_states);
   auto swing_foot_traj_gen =
-      builder.AddSystem<FiniteHorizonLqrSwingFootTrajGenerator>(
-          plant_w_springs, lsys, single_support_states, single_support_durations,
+      builder.AddSystem<TargetSwingFtTrajGen>(
+          plant_w_springs, single_support_states, single_support_durations,
           left_right_pts, swing_foot_taj_gen_options);
 
   /**** OSC setup ****/
@@ -362,7 +361,8 @@ int DoMain(int argc, char* argv[]) {
   }
 
   RpyTaskSpaceTrackingData angular_traj("orientation_traj", gains.K_p_orientation,
-                                      gains.K_d_orientation, gains.W_orientation, plant_w_springs, plant_w_springs);
+                                      gains.K_d_orientation, gains.W_orientation,
+                                      plant_w_springs, plant_w_springs);
 
   angular_traj.AddFrameToTrack("pelvis");
 

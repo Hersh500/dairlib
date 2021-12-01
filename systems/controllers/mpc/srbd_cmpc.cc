@@ -35,11 +35,9 @@ namespace dairlib{
 
 SrbdCMPC::SrbdCMPC(const SingleRigidBodyPlant& plant, double dt,
                    bool traj,
-                   bool used_with_finite_state_machine,
-                   bool use_com) :
+                   bool used_with_finite_state_machine):
     plant_(plant),
     use_fsm_(used_with_finite_state_machine),
-    use_com_(use_com),
     traj_tracking_(traj),
     dt_(dt){
 
@@ -54,13 +52,13 @@ SrbdCMPC::SrbdCMPC(const SingleRigidBodyPlant& plant, double dt,
         BasicVector<double>(nx_)).get_index();
   }
 
-  foot_target_port_ = this->DeclareVectorInputPort("p_des" ,
-      BasicVector<double>(2*kLinearDim_)).get_index();
-
- PiecewisePolynomial<double> pp_traj;
-  srb_warmstart_port_ = this->DeclareAbstractInputPort(
-      "initial_guess",
-      drake::Value<drake::trajectories::Trajectory<double>>(pp_traj)).get_index();
+//  foot_target_port_ = this->DeclareVectorInputPort("p_des" ,
+//      BasicVector<double>(2*kLinearDim_)).get_index();
+//
+// PiecewisePolynomial<double> pp_traj;
+//  srb_warmstart_port_ = this->DeclareAbstractInputPort(
+//      "initial_guess",
+//      drake::Value<drake::trajectories::Trajectory<double>>(pp_traj)).get_index();
 
   traj_out_port_ = this->DeclareAbstractOutputPort("y(t)",
       &SrbdCMPC::GetMostRecentMotionPlan).get_index();
@@ -88,9 +86,9 @@ void SrbdCMPC::AddMode(const LinearSrbdDynamics&  dynamics,
   SrbdMode mode = {dynamics, reset, stance, N};
   for (int i = 0; i < N; i++) {
     xx.push_back(prog_.NewContinuousVariables(
-        nx_, "x_" + std::to_string(i + stance)));
+        nx_, "x_" + std::to_string(stance) + std::to_string(i)));
     uu.push_back(prog_.NewContinuousVariables(
-        nu_, "u_" + std::to_string(i + stance)));
+        nu_, "u_" + std::to_string(stance) + std::to_string(i)));
   }
   pp.push_back(prog_.NewContinuousVariables(
       kLinearDim_, "p_" + std::to_string(stance)));
@@ -127,21 +125,21 @@ void SrbdCMPC::Build() {
   CheckProblemDefinition();
   MakeDynamicsConstraints();
   MakeFrictionConeConstraints();
-//  MakeKinematicReachabilityConstraints();
+  MakeKinematicReachabilityConstraints();
   MakeInitialStateConstraint();
   MakeTerrainConstraints();
   MakeCost();
 
   drake::solvers::SolverOptions solver_options;
   solver_options.SetOption(OsqpSolver::id(), "verbose", 1);
-  solver_options.SetOption(OsqpSolver::id(), "eps_abs", 5e-5);
-  solver_options.SetOption(OsqpSolver::id(), "eps_rel", 1e-4);
-//  solver_options.SetOption(OsqpSolver::id(), "eps_prim_inf", 1e-4);
-//  solver_options.SetOption(OsqpSolver::id(), "eps_dual_inf", 1e-4);
+  solver_options.SetOption(OsqpSolver::id(), "eps_abs", 1e-5);
+  solver_options.SetOption(OsqpSolver::id(), "eps_rel", 1e-5);
+  solver_options.SetOption(OsqpSolver::id(), "eps_prim_inf", 1e-4);
+  solver_options.SetOption(OsqpSolver::id(), "eps_dual_inf", 1e-4);
   solver_options.SetOption(OsqpSolver::id(), "polish", 1);
   solver_options.SetOption(OsqpSolver::id(), "scaled_termination", 1);
-//  solver_options.SetOption(OsqpSolver::id(), "adaptive_rho_fraction", 1.0);
-  solver_options.SetOption(OsqpSolver::id(), "max_iter", 15000);
+  solver_options.SetOption(OsqpSolver::id(), "adaptive_rho_fraction", 1.0);
+  solver_options.SetOption(OsqpSolver::id(), "max_iter", 20000);
   prog_.SetSolverOptions(solver_options);
 }
 
@@ -185,6 +183,7 @@ void SrbdCMPC::UpdateKinematicConstraints(
   for (auto & constraint : kinematic_constraint_){
     prog_.RemoveConstraint(constraint);
   }
+
   kinematic_constraint_.clear();
 
   MatrixXd A = MatrixXd::Zero(kLinearDim_, 2*kLinearDim_);
@@ -233,8 +232,8 @@ void SrbdCMPC::UpdateDynamicsConstraints(const Eigen::VectorXd& x,
     beq = VectorXd::Zero(nx_);
     CopyDiscreteDynamicsConstraint(modes_.at(1-fsm_state),
         false, pos, &Aeq, &beq);
-    prog_.RemoveConstraint(dynamics_.back());
-    dynamics_.back() = prog_.AddLinearEqualityConstraint(
+    prog_.RemoveConstraint(dynamics_.at(mode.N));
+    dynamics_.at(mode.N) = prog_.AddLinearEqualityConstraint(
         Aeq, beq,
         {xx.at(total_knots_-1), pp.at(1-fsm_state),
          uu.at(total_knots_-1), xx.at(total_knots_)});
@@ -381,11 +380,11 @@ EventStatus SrbdCMPC::PeriodicUpdate(
   const OutputVector<double>* robot_output =
       (OutputVector<double>*)this->EvalVectorInput(context, state_port_);
 
-  const drake::AbstractValue* traj_value =
-      this->EvalAbstractInput(context, srb_warmstart_port_);
-
-  const auto& warmstart_traj =
-      traj_value->get_value<drake::trajectories::Trajectory<double>>();
+//  const drake::AbstractValue* traj_value =
+//      this->EvalAbstractInput(context, srb_warmstart_port_);
+//
+//  const auto& warmstart_traj =
+//      traj_value->get_value<drake::trajectories::Trajectory<double>>();
 
   VectorXd x = robot_output->GetState();
 
@@ -409,17 +408,17 @@ EventStatus SrbdCMPC::PeriodicUpdate(
     UpdateConstraints(plant_.CalcSRBStateFromPlantState(x), 0, 0);
   }
 
-  VectorXd foot_target =
-      this->EvalVectorInput(context, foot_target_port_)->get_value();
+//  VectorXd foot_target =
+//      this->EvalVectorInput(context, foot_target_port_)->get_value();
   UpdateFootPlacementCost(
       fsm_state,
-      foot_target.head(kLinearDim_),
-      foot_target.tail(kLinearDim_));
-
-  SetInitialGuess(fsm_state, timestamp,
-                  foot_target.head(kLinearDim_),
-                  foot_target.tail(kLinearDim_),
-                  warmstart_traj);
+      Vector3d::Zero(),
+      Vector3d::Zero());
+//
+//  SetInitialGuess(fsm_state, timestamp,
+//                  foot_target.head(kLinearDim_),
+//                  foot_target.tail(kLinearDim_),
+//                  warmstart_traj);
 
 //  auto lin_con = prog_.GetAllLinearConstraints();
 //  for (auto& binding : lin_con) {

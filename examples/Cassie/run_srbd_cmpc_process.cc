@@ -142,9 +142,8 @@ int DoMain(int argc, char* argv[]) {
   LinearSrbdDynamics left_stance_dynamics = {Al, Bl, bl};
   LinearSrbdDynamics right_stance_dynamics = {Ar, Br, br};
 
-
   auto cmpc = builder.AddSystem<SrbdCMPC>(
-      srb_plant, dt, false, true,  FLAGS_use_com);
+      srb_plant, dt, false, true);
   std::vector<VectorXd> kin_nom =
       {left_safe_nominal_foot_pos - des_com_pos,
        right_safe_nominal_foot_pos - des_com_pos};
@@ -162,12 +161,11 @@ int DoMain(int argc, char* argv[]) {
   x_des(2) = des_com_pos(2);
   x_des(6) = FLAGS_v_des;
   std::cout << "xd:\n" << x_des << std::endl;
-  MatrixXd qq = gains.q.asDiagonal();
 
   cmpc->AddTrackingObjective(x_des, gains.q.asDiagonal());
   cmpc->SetTerminalCost(gains.qf.asDiagonal());
   cmpc->AddInputRegularization(gains.r.asDiagonal());
-  cmpc->AddFootPlacementRegularization(Eigen::Matrix3d::Identity());
+  cmpc->AddFootPlacementRegularization(Eigen::Matrix3d::Zero());
 
   // set friction coeff
   cmpc->SetMu(gains.mu);
@@ -184,12 +182,12 @@ int DoMain(int argc, char* argv[]) {
   auto fsm = builder.AddSystem<TimeBasedFiniteStateMachine>(
       plant, fsm_states, state_durations);
 
-  auto warmstarter = builder.AddSystem<LipmWarmStartSystem>(
-      srb_plant, FLAGS_h_des, FLAGS_stance_time,
-      FLAGS_dt, fsm_states, fsm_stances);
-
-  auto liftoff_event_time =
-      builder.AddSystem<FiniteStateMachineEventTime>(plant, fsm_states);
+//  auto warmstarter = builder.AddSystem<LipmWarmStartSystem>(
+//      srb_plant, FLAGS_h_des, FLAGS_stance_time,
+//      FLAGS_dt, fsm_states, fsm_stances);
+//
+//  auto liftoff_event_time =
+//      builder.AddSystem<FiniteStateMachineEventTime>(plant, fsm_states);
 
   std::vector<std::string> signals = {"fsm"};
 //  auto fsm_send = builder.AddSystem<DrakeSignalSender>(signals, FLAGS_stance_time * 2);
@@ -217,23 +215,23 @@ int DoMain(int argc, char* argv[]) {
   //  builder.Connect(fsm_send->get_output_port(), fsm_pub->get_input_port());
 
   builder.Connect(fsm->get_output_port(), cmpc->get_fsm_input_port());
-  builder.Connect(fsm->get_output_port(), warmstarter->get_input_port_fsm());
-  builder.Connect(fsm->get_output_port(),
-                  liftoff_event_time->get_input_port_fsm());
-  builder.Connect(robot_out->get_output_port(),
-                  liftoff_event_time->get_input_port_state());
+//  builder.Connect(fsm->get_output_port(), warmstarter->get_input_port_fsm());
+//  builder.Connect(fsm->get_output_port(),
+//                  liftoff_event_time->get_input_port_fsm());
+//  builder.Connect(robot_out->get_output_port(),
+//                  liftoff_event_time->get_input_port_state());
   builder.Connect(robot_out->get_output_port(), fsm->get_input_port_state());
-  builder.Connect(robot_out->get_output_port(), warmstarter->get_input_port_state());
+//  builder.Connect(robot_out->get_output_port(), warmstarter->get_input_port_state());
   builder.Connect(robot_out->get_output_port(),
                   cmpc->get_state_input_port());
-  builder.Connect(liftoff_event_time->get_output_port_event_time(),
-                  warmstarter->get_input_port_touchdown_time());
-  builder.Connect(xdes_source->get_output_port(),
-                  warmstarter->get_xdes_input_port());
-  builder.Connect(warmstarter->get_output_port_lipm_from_current(),
-                  cmpc->get_warmstart_input_port());
-  builder.Connect(warmstarter->get_output_port_foot_target(),
-                  cmpc->get_foot_target_input_port());
+//  builder.Connect(liftoff_event_time->get_output_port_event_time(),
+//                  warmstarter->get_input_port_touchdown_time());
+//  builder.Connect(xdes_source->get_output_port(),
+//                  warmstarter->get_xdes_input_port());
+//  builder.Connect(warmstarter->get_output_port_lipm_from_current(),
+//                  cmpc->get_warmstart_input_port());
+//  builder.Connect(warmstarter->get_output_port_foot_target(),
+//                  cmpc->get_foot_target_input_port());
 
   builder.Connect(cmpc->get_output_port(), mpc_out_publisher->get_input_port());
 
