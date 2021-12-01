@@ -157,6 +157,7 @@ void SingleRigidBodyPlant::CopyContinuousLinearized3dSrbDynamicsForMPC(
   B.block(6, 0, 3, 3) = (1.0 / m) * Matrix3d::Identity();
   B.block(9, 0, 3, 1) = g_I_inv *
       HatOperator3x3(R_yaw * (eq_foot_pos - eq_com_pos));
+  // what is this line, why is the start col 9?
   B.block(9, 9, 3, 1) = g_I_inv * Vector3d(0.0, 0.0, 1.0);
 
   // Continuous Affine portion (b)
@@ -197,7 +198,7 @@ void SingleRigidBodyPlant::CopyDiscreteLinearizedSrbDynamicsForMPC(
 Eigen::Vector3d SingleRigidBodyPlant::CalcContactForce(const Eigen::VectorXd &joint_torques,
                                                        const BipedStance &stance) const {
   // Get the jacobian that converts from joint torques to translational velocity
-  Eigen::MatrixXd J;
+  Eigen::MatrixXd J = Eigen::MatrixXd::Zero(4, joint_torques.size());
   auto contact_pt = contact_points_.at(stance);
   plant_.CalcJacobianTranslationalVelocity(*plant_context_, JacobianWrtVariable::kV, contact_pt.second, contact_pt.first,
                                     world_frame_, world_frame_, &J);
