@@ -133,11 +133,14 @@ SRBDResidualEstimator::DiscreteVariableUpdate(const drake::systems::Context<doub
 
   // Get the srbd state and foot state
   VectorXd srbd_state = plant_.CalcSRBStateFromPlantState(x);
-
+//  std::cout << "--------------" << std::endl;
+//  std::cout << "srbd state" << std::endl;
+//  std::cout << srbd_state << std::endl;
   // switch based on the contact state.
   std::vector<Eigen::Vector3d> foot_locs = plant_.CalcFootPositions(x);
 
   Eigen::Vector3d foot_loc = foot_locs[fsm_state(0)];
+//  std::cout << foot_loc << std::endl;
   BipedStance cur_stance_mode = modes_.at(fsm_state(0)).stance;
 
   UpdateLstSqEquation(srbd_state, u_nom, foot_loc, cur_stance_mode);
@@ -168,8 +171,8 @@ void SRBDResidualEstimator::UpdateLstSqEquation(Eigen::VectorXd state,
   // the last row isn't ready to use yet since the next state needs to be added to it.
   // Implicit cast from stance_mode (BipedStance) to int isn't great.
   y_.row(buffer_len_ - 1) =
-          -modes_.at(stance_mode).dynamics.A * vec_joined - -modes_.at(stance_mode).dynamics.B * input -
-          -modes_.at(stance_mode).dynamics.b;
+          -modes_.at(stance_mode).dynamics.A * vec_joined - modes_.at(stance_mode).dynamics.B * input -
+          modes_.at(stance_mode).dynamics.b;
 
 
   // Add the current state to the 2nd to last row of Y, completing the temporary part.
