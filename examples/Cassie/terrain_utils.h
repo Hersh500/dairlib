@@ -12,7 +12,8 @@ using drake::multibody::MultibodyPlant;
 namespace dairlib {
     void generateRandomObstacles(MultibodyPlant<double> *plant,
                                  std::pair<double, double> x_lims,
-                                 std::pair<double, double> y_lims);
+                                 std::pair<double, double> y_lims,
+                                 unsigned int num_obs);
 
     void generateRandomObstacles(SceneGraph<double>& graph,
                                  std::pair<double, double> x_lims,

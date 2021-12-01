@@ -55,7 +55,7 @@ class CassieEnv_Joystick(gym.Env):
         self.observation_space = spaces.Dict({"position": spaces.Box(low = np.array([-5, -5, -5, -5, -np.pi]), high = np.array([5, 5, 5, 5, np.pi])),
                                               "image": spaces.Box(low = -1, high = 1, shape = self.image_dim)})
         self.state_dim = 5
-        self._max_episode_steps = 300
+        self._max_episode_steps = 30 * self.rate 
         
         ### Loading up Cached Initial Conditions ###
         self.all_ics = []
@@ -200,7 +200,7 @@ class CassieEnv_Joystick(gym.Env):
         ic = self.all_ics[:,ic_idx]
         
         self.ctrlr = sp.Popen([self.bin_dir + self.controller_p] + self.ctrlr_options)
-        self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--ic_idx=" + str(ic_idx), "--gaps=1"])
+        self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--ic_idx=" + str(ic_idx), "--num_obstacles="+str(6)])
         time.sleep(1)
 
 

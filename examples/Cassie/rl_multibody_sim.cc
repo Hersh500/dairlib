@@ -89,6 +89,7 @@ DEFINE_bool(make_srbd_approx, false, "modify plant to closer approximate single 
 DEFINE_uint32(ic_idx, 0, "index of initial condition in csv file");
 DEFINE_string(ic_fname, "examples/Cassie/cassie_initial_conditions.csv", "csv file where precomputed initial conditions are stored.");
 DEFINE_bool(gaps, false, "Whether or not to use gap terrains");
+DEFINE_uint32(num_obstacles, 3, "Number of large obstacles to generate");
 
 // The purpose of this is for the simulator to not run independently of the learner;
 // ie. it will only timestep when it receives the appropriate stepping LCM message from the agent/controller.
@@ -121,7 +122,7 @@ int do_main_test(int argc, char* argv[]) {
 //      generateRandomGaps(&plant, gap_lims);
     generateRandomSteps(&plant, step_lims);
   } else {
-      generateRandomObstacles(&plant, x_lims, y_lims);
+      generateRandomObstacles(&plant, x_lims, y_lims, FLAGS_num_obstacles);
   }
 
   std::string urdf;

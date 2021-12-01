@@ -19,7 +19,8 @@ using std::make_unique;
 namespace dairlib {
     void generateRandomObstacles(MultibodyPlant<double> *plant,
                                  std::pair<double, double> x_lims,
-                                 std::pair<double, double> y_lims) {
+                                 std::pair<double, double> y_lims,
+                                 unsigned int num_obs) {
         if (!plant->geometry_source_is_registered()) {
             return;
         }
@@ -29,8 +30,7 @@ namespace dairlib {
         std::uniform_real_distribution<double> y_dist(y_lims.first, y_lims.second);
         double x;
         double y;
-
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < num_obs; i++) {
             x = x_dist(generator);
             y = y_dist(generator);
             // Generate a random pose for this object; maybe based on some stochastic process?
