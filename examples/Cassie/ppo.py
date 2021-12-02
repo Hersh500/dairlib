@@ -7,7 +7,7 @@ from stable_baselines3 import PPO
 from cassie_joy_env import CassieEnv_Joystick
 
 workspace = [[-1, 6], [-3, 6], [0.5, 1.3]]
-env = CassieEnv_Joystick("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_SIMULATION", 2, workspace)
+env = CassieEnv_Joystick("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_SIMULATION", 2, workspace, True)
 
 now = datetime.now()
 logdir = "./rl_logging/" + now.strftime("%d%m%Y_%H%M%S_ppo") + "/"

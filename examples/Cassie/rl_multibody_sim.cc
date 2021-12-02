@@ -90,6 +90,7 @@ DEFINE_uint32(ic_idx, 0, "index of initial condition in csv file");
 DEFINE_string(ic_fname, "examples/Cassie/cassie_initial_conditions.csv", "csv file where precomputed initial conditions are stored.");
 DEFINE_bool(gaps, false, "Whether or not to use gap terrains");
 DEFINE_uint32(num_obstacles, 3, "Number of large obstacles to generate");
+DEFINE_bool(viz, true, "Whether or not to visualize");
 
 // The purpose of this is for the simulator to not run independently of the learner;
 // ie. it will only timestep when it receives the appropriate stepping LCM message from the agent/controller.
@@ -236,7 +237,9 @@ int do_main_test(int argc, char* argv[]) {
                     image_array_lcm_publisher->get_input_port());
 
   // visualizer stuff
-  DrakeVisualizer<double>::AddToBuilder(&builder, scene_graph);
+  if (FLAGS_viz) {
+    DrakeVisualizer<double>::AddToBuilder(&builder, scene_graph);
+  }
   auto diagram = builder.Build();
 
   // Create a context for this system:

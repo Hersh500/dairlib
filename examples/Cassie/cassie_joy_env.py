@@ -14,12 +14,12 @@ import threading
 
     
 # TODO(hersh): make a more flexible environment so it's easier to slot in other
-# low level controllers and tasks
+# low level controllers and tasks (like footstep placement)
 # requires: defining your own action -> message, message -> state, state -> reward,
 # lcm message types, termination conditions... seems to be pretty annoying anyways.
 # maybe it's just a more structured way to go about things?
 class CassieEnv_Joystick(gym.Env):
-    def __init__(self, action_channel, state_channel, rate, workspace):
+    def __init__(self, action_channel, state_channel, rate, workspace, visualize):
         super(CassieEnv_Joystick, self).__init__()
 
         ### DRAKE SIMULATION STUFF ###
@@ -30,6 +30,7 @@ class CassieEnv_Joystick(gym.Env):
         self.bin_dir = "./bazel-bin/examples/Cassie/"
         self.controller_p = "run_osc_walking_controller"
         self.simulation_p = "rl_multibody_sim"
+        self.viz = visualize
 
         ### Communication Stuff ###
         self.lc = lcm.LCM()
@@ -56,6 +57,7 @@ class CassieEnv_Joystick(gym.Env):
                                               "image": spaces.Box(low = -1, high = 1, shape = self.image_dim)})
         self.state_dim = 5
         self._max_episode_steps = 30 * self.rate 
+        self.prev_dyn_state = None
         
         ### Loading up Cached Initial Conditions ###
         self.all_ics = []
@@ -66,7 +68,8 @@ class CassieEnv_Joystick(gym.Env):
         self.all_ics = np.array(self.all_ics)
 
         ### Spawning Director Process ###
-        self.drake_director = sp.Popen(["bazel-bin/director/drake-director", "--use_builtin_scripts=frame,image", "--script", "examples/Cassie/director_scripts/show_time.py"])
+        if self.viz:
+            self.drake_director = sp.Popen(["bazel-bin/director/drake-director", "--use_builtin_scripts=frame,image", "--script", "examples/Cassie/director_scripts/show_time.py"])
         time.sleep(5)  # have to sleep here otherwise visualization throws an error since director has nontrivial startup time 
 
 
@@ -114,6 +117,16 @@ class CassieEnv_Joystick(gym.Env):
         y_loc = dyn_state[self.pos_names.index("base_y")]
         return -np.sqrt((x_loc - self.goal_state[0])**2 + (y_loc - self.goal_state[1])**2)
 
+    def reward_fn_firstorder(self, cur_state, prev_state):
+        x_loc = prev_state[self.pos_names.index("base_x")]
+        y_loc = prev_state[self.pos_names.index("base_y")]
+        d2goal_prev = np.sqrt((x_loc - self.goal_state[0])**2 + (y_loc - self.goal_state[1])**2)
+
+        x_loc = cur_state[self.pos_names.index("base_x")]
+        y_loc = cur_state[self.pos_names.index("base_y")]
+        d2goal_cur = np.sqrt((x_loc - self.goal_state[0])**2 + (y_loc - self.goal_state[1])**2)
+        return d2goal_prev - d2goal_cur
+
 
     # failure if we exit the workspace or success if we hit the goal
     def done_fn(self, dyn_state):
@@ -128,12 +141,14 @@ class CassieEnv_Joystick(gym.Env):
         z_cond = z_loc < self.workspace[2][0] or z_loc > self.workspace[2][1]
         if x_cond or y_cond or z_cond:
             print("Out of workspace!")
+            print("FINAL LOCATION:(", x_loc, y_loc, ")")
             return True
         dist_to_goal = np.sqrt((x_loc - self.goal_state[0])**2 + (y_loc - self.goal_state[1])**2)
-        if dist_to_goal < 1e-1:
+        if dist_to_goal < 3e-1:
             return True
         if self.ep_timesteps > self._max_episode_steps:
             print("max episode timesteps exceeded!")
+            print("FINAL LOCATION:(", x_loc, y_loc, ")")
             return True
         return False
 
@@ -172,13 +187,14 @@ class CassieEnv_Joystick(gym.Env):
                                   self.goal_state[0],
                                   self.goal_state[1],
                                   base_orientation])
+        reward = self.reward_fn_firstorder(dyn_state, self.prev_dyn_state)
         self.state = {"position":state_reduced, "image":image}
-        reward = self.reward_fn(dyn_state)
         self.done = self.done_fn(dyn_state)
         self.ep_timesteps += 1
         if self.done:
             self.kill_procs()
         # print("got reward", reward)
+        self.prev_dyn_state = dyn_state
         return self.state, reward, self.done, {}
 
 
@@ -200,7 +216,7 @@ class CassieEnv_Joystick(gym.Env):
         ic = self.all_ics[:,ic_idx]
         
         self.ctrlr = sp.Popen([self.bin_dir + self.controller_p] + self.ctrlr_options)
-        self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--ic_idx=" + str(ic_idx), "--num_obstacles="+str(6)])
+        self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--ic_idx=" + str(ic_idx), "--num_obstacles="+str(6), "--viz="+str(int(self.viz))])
         time.sleep(1)
 
 
@@ -225,6 +241,7 @@ class CassieEnv_Joystick(gym.Env):
 
         self.ep_timesteps = 0
         dyn_state = self.state_queue.get(block=True)
+        self.prev_dyn_state = dyn_state
         image = self.image_queue.get(block=True)
         base_orientation = R.from_quat(dyn_state[0:4]).as_euler("zyx")[0]
         state_reduced = np.array([dyn_state[self.pos_names.index("base_x")],
