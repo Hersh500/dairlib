@@ -7,6 +7,7 @@
 #include "drake/systems/framework/leaf_system.h"
 #include "systems/controllers/mpc/srbd_cmpc.h"
 #include "multibody/single_rigid_body_plant.h"
+#include <fstream>
 
 namespace dairlib::systems {
 class SRBDResidualEstimator : public drake::systems::LeafSystem<double> {
@@ -52,8 +53,7 @@ class SRBDResidualEstimator : public drake::systems::LeafSystem<double> {
         // states from estimator get added to this, used to build least squares problem
         mutable Eigen::MatrixXd X_;
 
-        // state + foot + force + b
-        int num_X_cols = nx_ + 3 + nu_ + nx_;
+        mutable std::ofstream ofs_;
 
         // Transition states for least squares estimator.
         mutable Eigen::MatrixXd y_;
@@ -64,6 +64,9 @@ class SRBDResidualEstimator : public drake::systems::LeafSystem<double> {
         int state_in_port_, A_hat_port_, B_hat_port_, b_hat_port_, fsm_port_, mpc_in_port_;
         int nx_ = 12;
         int nu_ = 4;
+        // state + foot + force + b
+        int num_X_cols = nx_ + 3 + nu_ + 1;
+
         bool use_fsm_;
         mutable unsigned int ticks_ = 0;
         std::vector<dairlib::SrbdMode> modes_;
@@ -72,6 +75,10 @@ class SRBDResidualEstimator : public drake::systems::LeafSystem<double> {
         // discrete update indices
         int current_fsm_state_idx_;
         int prev_event_time_idx_;
+
+        // debugging variables
+        mutable Eigen::VectorXd prev_state_;
+        mutable Eigen::VectorXd prev_input_;
 
         // Solves the Least Squares Problem, connects matrices to outputs
         drake::systems::EventStatus PeriodicUpdate(

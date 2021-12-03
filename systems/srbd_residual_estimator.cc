@@ -2,6 +2,7 @@
 // Created by hersh on 11/15/21.
 //
 #include <iostream>
+#include <fstream>
 #include "srbd_residual_estimator.h"
 #include "systems/framework/output_vector.h"
 #include "dairlib/lcmt_saved_traj.hpp"
@@ -23,6 +24,8 @@ SRBDResidualEstimator::SRBDResidualEstimator(const multibody::SingleRigidBodyPla
   // Initialize data matrices
   X_ = MatrixXd::Zero(buffer_len_, num_X_cols);
   y_ = MatrixXd::Zero(buffer_len_, nx_);
+  prev_state_ = VectorXd::Zero(nx_ + 3);
+  prev_input_ = VectorXd::Zero(nu_);
 
   // Declare all ports
   state_in_port_ = this->DeclareVectorInputPort(
@@ -54,7 +57,10 @@ SRBDResidualEstimator::SRBDResidualEstimator(const multibody::SingleRigidBodyPla
 
   DeclarePerStepDiscreteUpdateEvent(&SRBDResidualEstimator::DiscreteVariableUpdate);
   DeclarePeriodicDiscreteUpdateEvent(rate_, 0, &SRBDResidualEstimator::PeriodicUpdate);
-
+  ofs_ = std::ofstream("log2.txt");
+  if (! ofs_) {
+    std::cout << "could not log!" << std::endl;
+  }
 }
 
 void SRBDResidualEstimator::GetAHat(const drake::systems::Context<double> &context, Eigen::MatrixXd *A_msg) const {
@@ -126,10 +132,6 @@ SRBDResidualEstimator::DiscreteVariableUpdate(const drake::systems::Context<doub
 
   // Full robot state
   VectorXd x = robot_output->GetState();
-//  Eigen::VectorXd u_nom = Eigen::VectorXd::Zero(nu_);
-//  if (input_traj.datapoints.cols() > 0) {
-//    Eigen::VectorXd u_nom = input_traj.datapoints.col(0);
-//  }
 
   // Get the srbd state and foot state
   VectorXd srbd_state = plant_.CalcSRBStateFromPlantState(x);
@@ -159,24 +161,57 @@ void SRBDResidualEstimator::UpdateLstSqEquation(Eigen::VectorXd state,
   vec_joined << state, stance_foot_loc;
 
   // Rotate X and y up by a row.
-  X_.block(0, 0, buffer_len_ - 1, num_X_cols) = X_.block(1, 0, buffer_len_ - 1, num_X_cols);
-  y_.block(0, 0, buffer_len_ - 1, nx_) = y_.block(1, 0, buffer_len_ - 1, nx_);
+  X_.block(0, 0, buffer_len_ - 2, num_X_cols) = X_.block(1, 0, buffer_len_ - 1, num_X_cols);
+  y_.block(0, 0, buffer_len_ - 2, nx_) = y_.block(1, 0, buffer_len_ - 1, nx_);
 
   // set the last row of X to the current state and input, and ones
-  X_.row(buffer_len_ - 1).head(nx_ + 3) = vec_joined;
-  X_.row(buffer_len_ - 1).segment(nx_ + 3, nu_) = input;
-  X_.row(buffer_len_ - 1).tail(nx_) = Eigen::VectorXd::Ones(nx_);
+  X_.row(buffer_len_ -1) << state, stance_foot_loc, input, Eigen::VectorXd::Ones(1);
 
-  // Set the last row of Y to be the -A * cur_state - B * cur_input - b (based on the stance mode)
+  /*
+  if (ofs_ && ticks_ == 0) {
+    ofs_ << "#" << std::endl;
+    ofs_ << modes_.at(stance_mode).dynamics.A << std::endl;
+    ofs_ << "#" << std::endl;
+    ofs_ << modes_.at(stance_mode).dynamics.B << std::endl;
+    ofs_ << "#" << std::endl;
+    ofs_ << modes_.at(stance_mode).dynamics.b << std::endl;
+  }
+
+  if (ofs_) {
+    Eigen::VectorXd vec_row(nx_ + 3 + nu_ + 1);
+    vec_row << state, stance_foot_loc, input, Eigen::VectorXd::Ones(1);
+    ofs_ << "#" << std::endl;
+    ofs_ << vec_row << std::endl;
+  }
+  */
+
+  // Set the 2nd to last row of Y to be the cur_state -A * prev_state - B * prev_input - b (based on the stance mode)
   // the last row isn't ready to use yet since the next state needs to be added to it.
-  // Implicit cast from stance_mode (BipedStance) to int isn't great.
-  y_.row(buffer_len_ - 1) =
-          -modes_.at(stance_mode).dynamics.A * vec_joined - modes_.at(stance_mode).dynamics.B * input -
+  y_.row(buffer_len_ - 2) = state - modes_.at(stance_mode).dynamics.A * prev_state_ - modes_.at(stance_mode).dynamics.B * prev_input_ -
           modes_.at(stance_mode).dynamics.b;
 
-
-  // Add the current state to the 2nd to last row of Y, completing the temporary part.
-  y_.row(buffer_len_ - 2) = y_.row(buffer_len_ - 2) + state;
+//  if (ofs_) {
+//    ofs_ << "#" << std::endl;
+//    ofs_ << X_ << std::endl;
+//    ofs_ << "#" << std::endl;
+//    ofs_ << y_ << std::endl;
+//  }
+  /*
+  if (ticks_ >= buffer_len_) {
+    // debugging step: check if the dynamics of the past state + residual dynamics of past state are close to this state.
+    Eigen::VectorXd exp_state = modes_.at(stance_mode).dynamics.A * prev_state_ + modes_.at(stance_mode).dynamics.B * prev_input_ +
+            modes_.at(stance_mode).dynamics.b;
+    Eigen::VectorXd res_state = cur_A_hat_ * prev_state_ + cur_B_hat_ * prev_input_ + cur_b_hat_;
+    std::cout << "-----------------" << std::endl;
+    std::cout << "nominal next state: " << exp_state << std::endl;
+    std::cout << "residual: " << res_state << std::endl;
+    std::cout << "actual next state: " << state << std::endl;
+    std::cout << "nominal + residual: " << exp_state + res_state << std::endl;
+    std::cout << "-----------------" << std::endl;
+  }
+  */
+  prev_state_ = vec_joined;
+  prev_input_ = input;
 }
 
 void SRBDResidualEstimator::SolveLstSq() const {
@@ -184,14 +219,25 @@ void SRBDResidualEstimator::SolveLstSq() const {
   Eigen::MatrixXd X_c = X_.block(0, 0, buffer_len_ - 1, num_X_cols);
   Eigen::MatrixXd y_c = y_.block(0, 0, buffer_len_ - 1, nx_);
 
-  Eigen::MatrixXd soln = X_c.colPivHouseholderQr().solve(y_c).transpose();
+  Eigen::MatrixXd soln = (X_c.transpose() * X_c).colPivHouseholderQr().solve(X_c.transpose() * y_c).transpose();
 
   // Select the appropriate parts of the solution matrix for the residuals
   cur_A_hat_ = soln.block(0, 0, nx_, nx_ + 3);
   cur_B_hat_ = soln.block(0, nx_ + 3, nx_, nu_);
-  cur_b_hat_ = soln.block(0, nx_ + nu_ + 3, nx_, 1);
-  std::cout << "#################################" << std::endl;
-  std::cout << "Current A_hat " << cur_A_hat_ << std::endl;
+  cur_b_hat_ = soln.block(0, nx_+ 3 + nu_, nx_, 1);
+
+//  cur_b_hat_ = soln.block(0, nx_ + nu_ + 3, nx_, nx_).diagonal();
+//  std::cout << "#################################" << std::endl;
+//  std::cout << modes_.at(0).dynamics.A << std::endl;
+//  std::cout << "#################################" << std::endl;
+//  std::cout << "Current A_hat " << cur_A_hat_ << std::endl;
+//  std::cout << "#################################" << std::endl;
+//  std::cout << "Current B_hat" << cur_B_hat_ << std::endl;
+//
+//  std::cout << "#################################" << std::endl;
+//  std::cout << modes_.at(0).dynamics.b << std::endl;
+//  std::cout << "#################################" << std::endl;
+//  std::cout << "Current b_hat" << cur_b_hat_ << std::endl;
 }
 
 }
