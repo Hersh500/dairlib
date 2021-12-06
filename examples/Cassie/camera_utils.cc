@@ -79,5 +79,33 @@ MakeGenericCameraModel(const std::string &renderer_name) {
     return {color_camera, depth_camera};
 }
 
+std::pair <drake::geometry::render::ColorRenderCamera,
+        drake::geometry::render::DepthRenderCamera>
+MakeWideCameraModel(const std::string &renderer_name) {
+  const int kHeight = 128;
+  const int kWidth = 128;
+
+  // To pose the two sensors relative to the camera body, we'll assume X_BC = I,
+  // and select a representative value for X_CD drawn from calibration to define
+  // X_BD.
+  drake::geometry::render::ColorRenderCamera color_camera{
+          {renderer_name,
+           {kWidth, kHeight, 50, 50, 64, 64},
+           {0.01, 10.0} /* clipping_range */,
+           {} /* X_BC */},
+          false};
+  const RigidTransformd X_BD(
+          RotationMatrix<double>(RollPitchYaw<double>(
+                  0.0, 0.0, 0.0)),
+          Vector3d(0.015, -0.00019, -0.0001));
+  drake::geometry::render::DepthRenderCamera depth_camera{
+          {renderer_name,
+                  {kWidth, kHeight, 50, 50, 64, 64},
+                  {0.01, 10.0} /* clipping_range */,
+                  X_BD},
+          {0.1,   10.0} /* depth_range */};
+  return {color_camera, depth_camera};
+}
+
 };
 } // namespace dairlib
