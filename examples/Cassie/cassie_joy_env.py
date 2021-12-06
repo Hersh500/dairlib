@@ -216,7 +216,7 @@ class CassieEnv_Joystick(gym.Env):
         ic = self.all_ics[:,ic_idx]
         
         self.ctrlr = sp.Popen([self.bin_dir + self.controller_p] + self.ctrlr_options)
-        self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--ic_idx=" + str(ic_idx), "--num_obstacles="+str(6), "--viz="+str(int(self.viz))])
+        self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--ic_idx=" + str(ic_idx), "--num_obstacles="+str(6), "--viz="+str(int(self.viz)), "--gaps=1"])
         time.sleep(1)
 
 
@@ -272,10 +272,10 @@ class CassieEnv_Joystick(gym.Env):
 def main():
     try: 
         workspace = [[-1, 5], [-3, 3], [0.5, 1.3]]
-        env = CassieEnv_Joystick("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_SIMULATION", 10, workspace)
+        env = CassieEnv_Joystick("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_SIMULATION", 10, workspace, True)
         s = env.reset()
         i = 0
-        while i < 10: 
+        while i < 1000: 
             s, r, d, _ = env.step([0.0, 0, 0, 0])  # just to see what happens
             i += 1
             time.sleep(0.05)
