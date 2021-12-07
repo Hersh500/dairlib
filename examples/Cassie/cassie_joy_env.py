@@ -11,8 +11,12 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 import threading
+import argparse
 
-    
+# temporary
+all_images = []    
+all_states = []
+
 # TODO(hersh): make a more flexible environment so it's easier to slot in other
 # low level controllers and tasks (like footstep placement)
 # requires: defining your own action -> message, message -> state, state -> reward,
@@ -70,7 +74,7 @@ class CassieEnv_Joystick(gym.Env):
         ### Spawning Director Process ###
         if self.viz:
             self.drake_director = sp.Popen(["bazel-bin/director/drake-director", "--use_builtin_scripts=frame,image", "--script", "examples/Cassie/director_scripts/show_time.py"])
-        time.sleep(5)  # have to sleep here otherwise visualization throws an error since director has nontrivial startup time 
+            time.sleep(5)  # have to sleep here otherwise visualization throws an error since director has nontrivial startup time 
 
 
 
@@ -81,6 +85,7 @@ class CassieEnv_Joystick(gym.Env):
 
         # com angle, trans. pos, ang vel, trans. vel
         state = np.array(list(msg.position[0:7]) + list(msg.velocity[0:6]))
+        all_states.append(list(msg.position))
         self.state_queue.put(state)
 
     # Handles the input image and puts it in queue
@@ -95,6 +100,8 @@ class CassieEnv_Joystick(gym.Env):
         else:
             image = Image.frombytes("I;16", (image_msg.width, image_msg.height), image_data)
         image = np.array(image)
+        # since the depth image has values that correspond to real quantities, this is not great.
+        all_images.append(image)
         image = image.astype(np.float32)
         image = image/2**16
         self.image_queue.put(np.expand_dims(image, axis=0))
@@ -216,7 +223,7 @@ class CassieEnv_Joystick(gym.Env):
         ic = self.all_ics[:,ic_idx]
         
         self.ctrlr = sp.Popen([self.bin_dir + self.controller_p] + self.ctrlr_options)
-        self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--ic_idx=" + str(ic_idx), "--num_obstacles="+str(6), "--viz="+str(int(self.viz)), "--gaps=1"])
+        self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--ic_idx=" + str(ic_idx), "--num_obstacles="+str(6), "--viz="+str(int(self.viz)), "--gaps=0"])
         time.sleep(1)
 
 
@@ -276,7 +283,7 @@ def main():
         s = env.reset()
         i = 0
         while i < 1000: 
-            s, r, d, _ = env.step([0.0, 0, 0, 0])  # just to see what happens
+            s, r, d, _ = env.step([1, 0, 0, 0])  # just to see what happens
             i += 1
             time.sleep(0.05)
 
@@ -288,6 +295,9 @@ def main():
     except KeyboardInterrupt:
         env.kill_procs()
         env.kill_director()
+        print("saving...")
+        np.save("step_images_obst", np.array(all_images))
+        np.save("step_states_obst", np.array(all_states))
 
 if __name__ == "__main__":
     main()
