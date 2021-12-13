@@ -24,6 +24,9 @@ namespace dairlib {
 
     void generateRandomSteps(MultibodyPlant<double> *plant,
                              std::pair<double, double> step_lims);
+
+    void generateReferenceTerrain(MultibodyPlant<double> *plant);
+
 }
 
 #endif //DAIRLIB_TERRAIN_UTILS_H

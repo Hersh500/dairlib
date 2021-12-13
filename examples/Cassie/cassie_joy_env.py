@@ -218,7 +218,8 @@ class CassieEnv_Joystick(gym.Env):
         self.set_goal(3, 3)
 
         # pick a new initial condition, set that as our state
-        ic_idx = np.random.randint(0, self.all_ics.shape[1])
+#        ic_idx = np.random.randint(0, self.all_ics.shape[1])
+        ic_idx = 200
         print("using ic", ic_idx)
         ic = self.all_ics[:,ic_idx]
         
@@ -283,7 +284,7 @@ def main():
         s = env.reset()
         i = 0
         while i < 1000: 
-            s, r, d, _ = env.step([1, 0, 0, 0])  # just to see what happens
+            s, r, d, _ = env.step([-0.2, 0, 0, 0])  # just to see what happens
             i += 1
             time.sleep(0.05)
 
@@ -295,9 +296,9 @@ def main():
     except KeyboardInterrupt:
         env.kill_procs()
         env.kill_director()
-        print("saving...")
-        np.save("step_images_obst", np.array(all_images))
-        np.save("step_states_obst", np.array(all_states))
+        # print("saving...")
+        # np.save("ref_images", np.array(all_images))
+        # np.save("ref_states", np.array(all_states))
 
 if __name__ == "__main__":
     main()

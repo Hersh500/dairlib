@@ -62,7 +62,7 @@ MakeGenericCameraModel(const std::string &renderer_name) {
     // X_BD.
     drake::geometry::render::ColorRenderCamera color_camera{
             {renderer_name,
-             {kWidth, kHeight, 50, 50, 64, 64},
+             {kWidth, kHeight, 100, 100, 64, 64},
              {0.01, 10.0} /* clipping_range */,
              {} /* X_BC */},
             false};

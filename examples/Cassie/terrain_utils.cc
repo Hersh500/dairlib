@@ -11,6 +11,7 @@
 
 using drake::geometry::SceneGraph;
 using drake::geometry::SourceId;
+using drake::geometry::HalfSpace;
 using drake::geometry::GeometryInstance;
 using drake::math::RigidTransform;
 using drake::multibody::MultibodyPlant;
@@ -153,4 +154,49 @@ namespace dairlib {
 
     }
 
+    void generateReferenceTerrain(MultibodyPlant<double> *plant) {
+      if (!plant->geometry_source_is_registered()) {
+        return;
+      }
+      RigidTransform<double> pose = RigidTransform<double>(drake::math::RollPitchYaw<double>(0, 0, 0),
+                                                           Eigen::Vector3d(0.1, 0, 0));
+
+//      plant->RegisterCollisionGeometry(plant->world_body(), pose, drake::geometry::Box(0.05, 0.05, 0.05),
+//                                       "box_collision_" + std::to_string(0),
+//                                       drake::multibody::CoulombFriction(0.8, 0.8));
+      plant->RegisterVisualGeometry(plant->world_body(), pose, drake::geometry::Box(0.05, 0.05, 0.1),
+                                    "box_visual_" + std::to_string(0), drake::geometry::IllustrationProperties());
+
+      pose = RigidTransform<double>(drake::math::RollPitchYaw<double>(0.05, 0.05, 0.05),
+                                                           Eigen::Vector3d(0.2, 0, 0));
+
+//      plant->RegisterCollisionGeometry(plant->world_body(), pose, drake::geometry::Box(0.05, 0.05, 0.05),
+//                                       "box_collision_" + std::to_string(1),
+//                                       drake::multibody::CoulombFriction(0.8, 0.8));
+      plant->RegisterVisualGeometry(plant->world_body(), pose, drake::geometry::Box(0.05, 0.05, 0.2),
+                                    "box_visual_" + std::to_string(1), drake::geometry::IllustrationProperties());
+
+      pose = RigidTransform<double>(drake::math::RollPitchYaw<double>(0, 0, 0),
+                                                           Eigen::Vector3d(0.3, 0, 0));
+
+//      plant->RegisterCollisionGeometry(plant->world_body(), pose, drake::geometry::Box(0.05, 0.05, 0.05),
+//                                       "box_collision_" + std::to_string(2),
+//                                       drake::multibody::CoulombFriction(0.8, 0.8));
+      plant->RegisterVisualGeometry(plant->world_body(), pose, drake::geometry::Box(0.05, 0.05, 0.3),
+                                    "box_visual_" + std::to_string(2), drake::geometry::IllustrationProperties());
+
+      pose = RigidTransform<double>(drake::math::RollPitchYaw<double>(0, 0, 0),
+                                    Eigen::Vector3d(0.4, 0.0, 0));
+
+      plant->RegisterVisualGeometry(plant->world_body(), pose, drake::geometry::Box(0.05, 0.05, 0.4),
+                                    "box_visual_" + std::to_string(3), drake::geometry::IllustrationProperties());
+
+      pose = RigidTransform<double>(drake::math::RollPitchYaw<double>(0, 0, 0),
+                                    Eigen::Vector3d(0.5, 0.0, 0));
+
+      plant->RegisterVisualGeometry(plant->world_body(), pose, drake::geometry::Box(0.05, 0.05, 0.5),
+                                    "box_visual_" + std::to_string(4), drake::geometry::IllustrationProperties());
+
+
+    }
 }

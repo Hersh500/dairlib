@@ -120,10 +120,11 @@ int do_main_test(int argc, char* argv[]) {
 
       if (FLAGS_gaps) {
       plant.RegisterAsSourceForSceneGraph(&scene_graph);
-      generateRandomGaps(&plant, gap_lims);
+//      generateRandomGaps(&plant, gap_lims);
 //    generateRandomSteps(&plant, step_lims);
   } else {
-      generateRandomObstacles(&plant, x_lims, y_lims, FLAGS_num_obstacles);
+//      generateRandomObstacles(&plant, x_lims, y_lims, FLAGS_num_obstacles);
+        generateReferenceTerrain(&plant);
   }
 
   std::string urdf;
