@@ -79,8 +79,8 @@ class SRBDResidualEstimator : public drake::systems::LeafSystem<double> {
         int prev_event_time_idx_;
 
         // debugging variables
-        mutable Eigen::VectorXd prev_state_;
-        mutable Eigen::VectorXd prev_input_;
+        mutable Eigen::VectorXd prev_state_ = Eigen::VectorXd::Zero(nx_ + 3);
+        mutable Eigen::VectorXd prev_input_ = Eigen::VectorXd::Zero(nu_);
 
         // Solves the Least Squares Problem, connects matrices to outputs
         drake::systems::EventStatus PeriodicUpdate(

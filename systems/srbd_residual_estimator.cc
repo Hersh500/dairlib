@@ -186,6 +186,10 @@ void SRBDResidualEstimator::UpdateLstSqEquation(Eigen::VectorXd state,
     ofs_ << modes_.at(stance_mode).dynamics.B << std::endl;
     ofs_ << "#" << std::endl;
     ofs_ << modes_.at(stance_mode).dynamics.b << std::endl;
+
+    //std::cout << "A matrix \n" << modes_.at(stance_mode).dynamics.A << std::endl;
+    //std::cout << "B matrix \n" << modes_.at(stance_mode).dynamics.B << std::endl;
+    //std::cout << "B matrix \n" << modes_.at(stance_mode).dynamics.b << std::endl;
   }
 
   if (ofs_) {
@@ -200,17 +204,19 @@ void SRBDResidualEstimator::UpdateLstSqEquation(Eigen::VectorXd state,
   states.col(1) = state;
   // Eventually can do some filtering in this step.
   Eigen::VectorXd ydot = ComputeYDot(states);
-  std::cout << "ydot:\n" << ydot <<  std::endl;
-  Eigen::VectorXd nominal_deriv = modes_.at(stance_mode).dynamics.A * prev_state_ - modes_.at(stance_mode).dynamics.B * prev_input_ -
+  // std::cout << "ydot \n" << ydot << std::endl;
+  Eigen::VectorXd nominal_deriv = modes_.at(stance_mode).dynamics.A * prev_state_ + modes_.at(stance_mode).dynamics.B * prev_input_ +
                                   modes_.at(stance_mode).dynamics.b;
-  std::cout << "nominal deriv: \n" << nominal_deriv << std::endl;
+  // std::cout << "prev_state:" << prev_state_ << std::endl;
+  // std::cout << "prev_input:" << prev_input_ << std::endl;
+  // std::cout << "nominal derivative: " << nominal_deriv << std::endl;
   if (continuous_) {
     y_.row(buffer_len_ - 2) = ydot - nominal_deriv;
   } else {
     y_.row(buffer_len_ - 2) =
             state - nominal_deriv;
   }
-  std::cout << "last row of y:" << std::endl << y_.row(buffer_len_ - 2)<< std::endl;
+  // std::cout << "last row of y:" << std::endl << y_.row(buffer_len_ - 2)<< std::endl;
   if (ofs_) {
     ofs_ << "#" << std::endl;
     ofs_ << X_ << std::endl;
@@ -225,6 +231,8 @@ void SRBDResidualEstimator::UpdateLstSqEquation(Eigen::VectorXd state,
             modes_.at(stance_mode).dynamics.b;
     Eigen::VectorXd res_state = cur_A_hat_ * prev_state_ + cur_B_hat_ * prev_input_ + cur_b_hat_;
     std::cout << "-----------------" << std::endl;
+    std::cout << "prev_state:" << prev_state_ << std::endl;
+    std::cout << "prev_input:" << prev_input_ << std::endl;
     std::cout << "nominal derivative: " << exp_deriv << std::endl;
     std::cout << "residual: " << res_state << std::endl;
     std::cout << "actual next deriv: " << ydot << std::endl;
@@ -238,8 +246,8 @@ void SRBDResidualEstimator::UpdateLstSqEquation(Eigen::VectorXd state,
 
 void SRBDResidualEstimator::SolveLstSq() const {
   // Solve the least squares equation, excluding the last row of X and y because it is always incomplete.
-  Eigen::MatrixXd X_c = X_.block(1, 0, buffer_len_ - 1, num_X_cols);
-  Eigen::MatrixXd y_c = y_.block(1, 0, buffer_len_ - 1, nx_);
+  Eigen::MatrixXd X_c = X_.block(0, 0, buffer_len_ - 1, num_X_cols);
+  Eigen::MatrixXd y_c = y_.block(0, 0, buffer_len_ - 1, nx_);
 
   Eigen::MatrixXd soln = (X_c.transpose() * X_c).colPivHouseholderQr().solve(X_c.transpose() * y_c).transpose();
 
