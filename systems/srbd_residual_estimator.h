@@ -13,7 +13,7 @@ namespace dairlib::systems {
 class SRBDResidualEstimator : public drake::systems::LeafSystem<double> {
     public:
         SRBDResidualEstimator(const multibody::SingleRigidBodyPlant &plant, double rate, unsigned int buffer_len,
-                              bool use_fsm);
+                              bool use_fsm, double dt, bool continuous);
 
         // Want to connect this to a callback that adds the state to a deque
         const drake::systems::InputPort<double> &get_state_input_port() const {
@@ -68,6 +68,8 @@ class SRBDResidualEstimator : public drake::systems::LeafSystem<double> {
         int num_X_cols = nx_ + 3 + nu_ + 1;
 
         bool use_fsm_;
+        double dt_;
+        bool continuous_;
         mutable unsigned int ticks_ = 0;
         std::vector<dairlib::SrbdMode> modes_;
         int nmodes_ = 0;
@@ -95,6 +97,10 @@ class SRBDResidualEstimator : public drake::systems::LeafSystem<double> {
                                  Eigen::VectorXd input,
                                  Eigen::Vector3d stance_foot_loc,
                                  BipedStance stance_mode) const;
+
+        // Returns the finite difference of the states here.
+        // TODO(hersh500): add some filtering here.
+        Eigen::VectorXd ComputeYDot(Eigen::MatrixXd state_history) const;
 
         // Solve the least squares equation periodically
         void SolveLstSq() const;

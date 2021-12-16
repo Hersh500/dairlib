@@ -143,6 +143,24 @@ int DoMain(int argc, char* argv[]) {
   LinearSrbdDynamics left_stance_dynamics = {Al, Bl, bl};
   LinearSrbdDynamics right_stance_dynamics = {Ar, Br, br};
 
+  // Continuous dynamics
+  MatrixXd Al_c = MatrixXd::Zero(nx, nx+3);
+  MatrixXd Bl_c = MatrixXd::Zero(nx, nu);
+  VectorXd bl_c = VectorXd::Zero(nx);
+  MatrixXd Ar_c = MatrixXd::Zero(nx, nx+3);
+  MatrixXd Br_c = MatrixXd::Zero(nx, nu);
+  VectorXd br_c = VectorXd::Zero(nx);
+
+  srb_plant.CopyContinuousLinearized3dSrbDynamicsForMPC(
+          mass, 0, BipedStance::kLeft,
+          I_rot, des_com_pos, left_neutral_foot_pos, &Al_c, &Bl_c, &bl_c);
+  srb_plant.CopyContinuousLinearized3dSrbDynamicsForMPC(
+          mass, 0, BipedStance::kRight,
+          I_rot, des_com_pos, right_neutral_foot_pos, &Ar_c, &Br_c, &br_c);
+
+  LinearSrbdDynamics left_stance_dynamics_c = {Al_c, Bl_c, bl_c};
+  LinearSrbdDynamics right_stance_dynamics_c = {Ar_c, Br_c, br_c};
+
   auto cmpc = builder.AddSystem<SrbdCMPC>(
       srb_plant, dt, false, true);
   std::vector<VectorXd> kin_nom =
@@ -206,10 +224,11 @@ int DoMain(int argc, char* argv[]) {
 //  builder.Connect(cmpc->get_output_port(), mpc_processor->get_input_port());
 
   // Least squares estimator
-  auto lstsq_sys = builder.AddSystem<SRBDResidualEstimator>(srb_plant, 0.01, 50, true);
-  lstsq_sys->AddMode(left_stance_dynamics, BipedStance::kLeft,
+  // last bool indicates that we're using the continuous time dynamics.
+  auto lstsq_sys = builder.AddSystem<SRBDResidualEstimator>(srb_plant, 0.01, 100, true, 1.0/2000, true);
+  lstsq_sys->AddMode(left_stance_dynamics_c, BipedStance::kLeft,
                 MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_time / dt));
-  lstsq_sys->AddMode(right_stance_dynamics, BipedStance::kRight,
+  lstsq_sys->AddMode(right_stance_dynamics_c, BipedStance::kRight,
                 MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_time / dt));
 
   builder.Connect(fsm->get_output_port(), lstsq_sys->get_fsm_input_port());
