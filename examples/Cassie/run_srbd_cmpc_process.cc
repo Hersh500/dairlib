@@ -20,6 +20,8 @@
 #include "systems/controllers/mpc/srbd_cmpc.h"
 #include "systems/controllers/mpc/lipm_warmstart_system.h"
 #include "systems/controllers/fsm_event_time.h"
+#include "systems/srbd_residual_estimator.h"
+#include "systems/srbd_sparse_residual_estimator.h"
 #include "multibody/single_rigid_body_plant.h"
 #include "examples/Cassie/mpc/cassie_srbd_cmpc_gains.h"
 #include "examples/Cassie/cassie_utils.h"
@@ -36,6 +38,7 @@ using systems::OutputVector;
 using systems::LipmWarmStartSystem;
 using systems::FiniteStateMachineEventTime;
 using systems::SRBDResidualEstimator;
+using systems::SRBDSparseResidualEstimator;
 using multibody::SingleRigidBodyPlant;
 
 
@@ -141,30 +144,7 @@ int DoMain(int argc, char* argv[]) {
   LinearSrbdDynamics left_stance_dynamics = {Al, Bl, bl};
   LinearSrbdDynamics right_stance_dynamics = {Ar, Br, br};
 
-<<<<<<< HEAD
-  // Continuous dynamics
-  MatrixXd Al_c = MatrixXd::Zero(nx, nx+3);
-  MatrixXd Bl_c = MatrixXd::Zero(nx, nu);
-  VectorXd bl_c = VectorXd::Zero(nx);
-  MatrixXd Ar_c = MatrixXd::Zero(nx, nx+3);
-  MatrixXd Br_c = MatrixXd::Zero(nx, nu);
-  VectorXd br_c = VectorXd::Zero(nx);
-
-  srb_plant.CopyContinuousLinearized3dSrbDynamicsForMPC(
-          mass, 0, BipedStance::kLeft,
-          I_rot, des_com_pos, left_neutral_foot_pos, &Al_c, &Bl_c, &bl_c);
-  srb_plant.CopyContinuousLinearized3dSrbDynamicsForMPC(
-          mass, 0, BipedStance::kRight,
-          I_rot, des_com_pos, right_neutral_foot_pos, &Ar_c, &Br_c, &br_c);
-
-  LinearSrbdDynamics left_stance_dynamics_c = {Al_c, Bl_c, bl_c};
-  LinearSrbdDynamics right_stance_dynamics_c = {Ar_c, Br_c, br_c};
-
-  auto cmpc = builder.AddSystem<SrbdCMPC>(
-      srb_plant, dt, false, true);
-=======
   auto cmpc = builder.AddSystem<SrbdCMPC>(srb_plant, dt, false);
->>>>>>> 55af9f6b66141d4db88a79a60a887c367050f253
   std::vector<VectorXd> kin_nom =
       {left_safe_nominal_foot_pos - des_com_pos,
        right_safe_nominal_foot_pos - des_com_pos};
@@ -215,18 +195,17 @@ int DoMain(int argc, char* argv[]) {
   auto mpc_out_publisher = builder.AddSystem(
       LcmPublisherSystem::Make<lcmt_saved_traj>(FLAGS_channel_plan, &lcm_local));
 
-<<<<<<< HEAD
 //  auto mpc_processor = builder.AddSystem<MpcTrajectoryReceiver>(
 //          TrajectoryType::kCubicHermite, TrajectoryType::kCubicHermite, false);
 //  builder.Connect(cmpc->get_output_port(), mpc_processor->get_input_port());
 
   // Least squares estimator
   // last bool indicates that we're using the continuous time dynamics.
-  auto lstsq_sys = builder.AddSystem<SRBDResidualEstimator>(srb_plant, 0.01, 200, true, 1.0/2000, true);
-  lstsq_sys->AddMode(left_stance_dynamics_c, BipedStance::kLeft,
-                MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_time / dt));
-  lstsq_sys->AddMode(right_stance_dynamics_c, BipedStance::kRight,
-                MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_time / dt));
+  auto lstsq_sys = builder.AddSystem<SRBDSparseResidualEstimator>(srb_plant, 0.01, 200, true, 1.0/2000);
+  lstsq_sys->AddMode(left_stance_dynamics, BipedStance::kLeft,
+                MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_duration / dt));
+  lstsq_sys->AddMode(right_stance_dynamics, BipedStance::kRight,
+                MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_duration / dt));
 
   builder.Connect(fsm->get_output_port(), lstsq_sys->get_fsm_input_port());
   builder.Connect(robot_out->get_output_port(), lstsq_sys->get_state_input_port());
@@ -236,8 +215,6 @@ int DoMain(int argc, char* argv[]) {
   //  builder.Connect(fsm->get_output_port(), fsm_send->get_input_port());
   //  builder.Connect(fsm_send->get_output_port(), fsm_pub->get_input_port());
 
-=======
->>>>>>> 55af9f6b66141d4db88a79a60a887c367050f253
   builder.Connect(fsm->get_output_port(), cmpc->get_fsm_input_port());
 //  builder.Connect(fsm->get_output_port(), warmstarter->get_input_port_fsm());
 //  builder.Connect(fsm->get_output_port(),

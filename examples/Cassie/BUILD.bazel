@@ -583,6 +583,7 @@ cc_binary(
         "//systems/framework:lcm_driven_loop",
         "//systems/primitives",
         "//systems:srbd_residual_estimator",
+        "//systems:srbd_sparse_residual_estimator",
         "@drake//:drake_shared_library",
         "@gflags",
     ],
