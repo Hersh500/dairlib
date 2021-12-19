@@ -456,27 +456,27 @@ cc_binary(
         "//systems/primitives",
         "@drake//:drake_shared_library",
         "@gflags",
-        "@pinocchio"
+        "@pinocchio",
     ],
 )
 
 cc_binary(
     name = "pinocchio_plant_benchmark",
+    testonly = 1,
     srcs = ["test/pinocchio_plant_benchmark.cc"],
     tags = ["manual"],
-    testonly = 1,
     deps = [
         ":cassie_urdf",
-        "//examples/PlanarWalker:urdf",
         ":sim_cassie_sensor_aggregator",
         "//common",
-        "//multibody:utils",
+        "//examples/PlanarWalker:urdf",
         "//multibody:pinocchio_plant",
+        "//multibody:utils",
         "//systems:robot_lcm_systems",
         "//systems/primitives",
         "@drake//:drake_shared_library",
         "@gflags",
-        "@pinocchio"
+        "@pinocchio",
     ],
 )
 
@@ -541,6 +541,7 @@ cc_binary(
         "//common",
         "//lcm:dircon_trajectory_saver",
         "//multibody:visualization_utils",
+        "//solvers:nonlinear_cost",
         "//solvers:optimization_utils",
         "//systems/primitives",
         "//systems/trajectory_optimization:dircon",
@@ -582,6 +583,33 @@ cc_binary(
         "//systems/framework:lcm_driven_loop",
         "//systems/primitives",
         "//systems:srbd_residual_estimator",
+        "@drake//:drake_shared_library",
+        "@gflags",
+    ],
+)
+
+cc_binary(
+    name = "run_srbd_cmpc_residual_process",
+    srcs = ["run_srbd_cmpc_residual_process.cc"],
+    deps = [
+        "cassie_fixed_point_solver",
+        ":cassie_urdf",
+        ":cassie_utils",
+        "//common",
+        "//examples/Cassie/mpc",
+        "//multibody:single_rigid_body_plant",
+        "//multibody:utils",
+        "//multibody/kinematic",
+        "//systems:dairlib_signal_lcm_systems",
+        "//systems:robot_lcm_systems",
+        "//systems:srbd_residual_estimator",
+        "//systems:system_utils",
+        "//systems/controllers:fsm_event_time",
+        "//systems/controllers:lipm_warmstart_system",
+        "//systems/controllers:srbd_cmpc",
+        "//systems/controllers:time_based_fsm",
+        "//systems/framework:lcm_driven_loop",
+        "//systems/primitives",
         "@drake//:drake_shared_library",
         "@gflags",
     ],

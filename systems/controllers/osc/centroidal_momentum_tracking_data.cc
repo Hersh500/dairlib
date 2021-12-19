@@ -20,26 +20,46 @@ CentroidalMomentumTrackingData::CentroidalMomentumTrackingData(
     const std::string &name, const MatrixXd &K_p, const MatrixXd &W,
     const drake::multibody::MultibodyPlant<double> &plant_w_spr,
     const drake::multibody::MultibodyPlant<double> &plant_wo_sp,
-    const std::string &urdf_w_spr, const std::string &urdf_wo_spr,
+    const multibody::PinocchioPlant<double>& pin_plant_w_spr,
+    const multibody::PinocchioPlant<double>& pin_plant_wo_spr,
     bool angular_only = true) :
     OptionsTrackingData(name,
                         angular_only ? 3 : 6, angular_only ? 3 : 6,
                         K_p,
-                        MatrixXd::Zero(n_y_, n_y_),
+                        MatrixXd::Zero(angular_only ? 3 : 6, angular_only ? 3 : 6),
                         W, plant_w_spr, plant_wo_sp),
-    pinocchio_plant_w_spings_(PinocchioPlant<double>(0.0, urdf_w_spr)),
-    pinocchio_plant_wo_springs_(PinocchioPlant<double>(0.0, urdf_wo_spr)) {
+    pinocchio_plant_w_spings_(pin_plant_w_spr),
+    pinocchio_plant_wo_springs_(pin_plant_wo_spr) {
 
   angular_only_ = angular_only;
-  pinocchio_plant_w_spings_.Finalize();
-  pinocchio_plant_wo_springs_.Finalize();
   pin_context_w_springs_ = pinocchio_plant_w_spings_.CreateDefaultContext();
   pin_context_wo_springs_ = pinocchio_plant_wo_springs_.CreateDefaultContext();
   ydot_ = VectorXd::Zero(n_y_);
-  error_ydot_ = VectorXd::Zero(n_y_);
-  yddot_des_ = VectorXd::Zero(n_y_);
-  yddot_des_converted_ = VectorXd::Zero(n_y_);
+  error_ydot_ = VectorXd::Zero(n_ydot_);
+  yddot_des_ = VectorXd::Zero(n_ydot_);
+  yddot_des_converted_ = VectorXd::Zero(n_ydot_);
 }
+
+void CentroidalMomentumTrackingData::UpdateActual(
+    const Eigen::VectorXd& x_w_spr,
+    const drake::systems::Context<double>& context_w_spr,
+    const Eigen::VectorXd& x_wo_spr,
+    const drake::systems::Context<double>& context_wo_spr, double t) {
+  // 1. Update actual output
+  if (use_springs_in_eval_) {
+    UpdateY(x_w_spr, context_w_spr);
+  } else {
+    UpdateY(x_wo_spr, context_wo_spr);
+  }
+    if (with_view_frame_) {
+    view_frame_rot_T_ =
+        view_frame_->CalcWorldToFrameRotation(plant_w_spr_, context_wo_spr);
+    y_ = view_frame_rot_T_ * y_;
+    J_ = view_frame_rot_T_ * J_;
+    JdotV_ = view_frame_rot_T_ * JdotV_;
+  }
+}
+
 
 void CentroidalMomentumTrackingData::UpdateYddotDes(double, double) {}
 
@@ -96,4 +116,6 @@ void CentroidalMomentumTrackingData::UpdateJ(const VectorXd &x_wo_spr,
 void CentroidalMomentumTrackingData::UpdateJdotV(
     const VectorXd &x_wo_spr, const Context<double> &context_wo_spr) {}
 
+void CentroidalMomentumTrackingData::CheckDerivedOscTrackingData(){}
 }
+

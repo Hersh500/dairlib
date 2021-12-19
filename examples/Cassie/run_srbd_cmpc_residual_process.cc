@@ -15,7 +15,6 @@
 #include "systems/robot_lcm_systems.h"
 #include "systems/controllers/time_based_fsm.h"
 #include "systems/framework/lcm_driven_loop.h"
-#include "systems/dairlib_signal_lcm_systems.h"
 #include "systems/system_utils.h"
 #include "systems/controllers/mpc/srbd_cmpc.h"
 #include "systems/controllers/mpc/lipm_warmstart_system.h"
@@ -24,11 +23,11 @@
 #include "examples/Cassie/mpc/cassie_srbd_cmpc_gains.h"
 #include "examples/Cassie/cassie_utils.h"
 #include "examples/Cassie/cassie_fixed_point_solver.h"
+#include "systems/srbd_residual_estimator.h"
+#include "systems/controllers/mpc/mpc_trajectory_reciever.h"
 
 namespace dairlib {
 
-using systems::DairlibSignalReceiver;
-using systems::DrakeSignalSender;
 using systems::RobotOutputReceiver;
 using systems::TimeBasedFiniteStateMachine;
 using systems::LcmDrivenLoop;
@@ -61,7 +60,7 @@ DEFINE_string(gains_filename, "examples/Cassie/mpc/cassie_srbd_cmpc_gains.yaml",
 DEFINE_string(channel_x, "CASSIE_STATE_SIMULATION", "channel to publish/receive cassie state");
 DEFINE_string(channel_plan, "SRBD_MPC_OUT", "channel to publish plan trajectory");
 DEFINE_string(channel_fsm, "FSM", "the name of the channel with the time-based fsm");
-DEFINE_double(stance_duration, 0.35, "duration of each stance phase");
+DEFINE_double(stance_time, 0.35, "duration of each stance phase");
 DEFINE_bool(debug_mode, false, "Manually set MPC values to debug");
 DEFINE_bool(use_com, false, "Use center of mass or a point to track CM location");
 DEFINE_bool(print_diagram, false, "print block diagram");
@@ -88,7 +87,7 @@ int DoMain(int argc, char* argv[]) {
   // Add MBP
   MultibodyPlant<double> plant(0.0);
   addCassieMultibody(&plant, nullptr, true,
-      "examples/Cassie/urdf/cassie_v2.urdf", true, false);
+                     "examples/Cassie/urdf/cassie_v2.urdf", true, false);
   plant.Finalize();
   auto plant_context = plant.CreateDefaultContext();
   auto srb_plant = SingleRigidBodyPlant(plant, plant_context.get(), FLAGS_use_com);
@@ -141,30 +140,7 @@ int DoMain(int argc, char* argv[]) {
   LinearSrbdDynamics left_stance_dynamics = {Al, Bl, bl};
   LinearSrbdDynamics right_stance_dynamics = {Ar, Br, br};
 
-<<<<<<< HEAD
-  // Continuous dynamics
-  MatrixXd Al_c = MatrixXd::Zero(nx, nx+3);
-  MatrixXd Bl_c = MatrixXd::Zero(nx, nu);
-  VectorXd bl_c = VectorXd::Zero(nx);
-  MatrixXd Ar_c = MatrixXd::Zero(nx, nx+3);
-  MatrixXd Br_c = MatrixXd::Zero(nx, nu);
-  VectorXd br_c = VectorXd::Zero(nx);
-
-  srb_plant.CopyContinuousLinearized3dSrbDynamicsForMPC(
-          mass, 0, BipedStance::kLeft,
-          I_rot, des_com_pos, left_neutral_foot_pos, &Al_c, &Bl_c, &bl_c);
-  srb_plant.CopyContinuousLinearized3dSrbDynamicsForMPC(
-          mass, 0, BipedStance::kRight,
-          I_rot, des_com_pos, right_neutral_foot_pos, &Ar_c, &Br_c, &br_c);
-
-  LinearSrbdDynamics left_stance_dynamics_c = {Al_c, Bl_c, bl_c};
-  LinearSrbdDynamics right_stance_dynamics_c = {Ar_c, Br_c, br_c};
-
-  auto cmpc = builder.AddSystem<SrbdCMPC>(
-      srb_plant, dt, false, true);
-=======
-  auto cmpc = builder.AddSystem<SrbdCMPC>(srb_plant, dt, false);
->>>>>>> 55af9f6b66141d4db88a79a60a887c367050f253
+  auto cmpc = builder.AddSystem<SrbdCMPC>(srb_plant, dt, false, true, true);
   std::vector<VectorXd> kin_nom =
       {left_safe_nominal_foot_pos - des_com_pos,
        right_safe_nominal_foot_pos - des_com_pos};
@@ -172,9 +148,9 @@ int DoMain(int argc, char* argv[]) {
                                    kin_nom);
 
   cmpc->AddMode(left_stance_dynamics, BipedStance::kLeft,
-      MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_duration / dt));
+                MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_time / dt));
   cmpc->AddMode(right_stance_dynamics, BipedStance::kRight,
-      MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_duration / dt));
+                MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_time / dt));
   cmpc->FinalizeModeSequence();
 
   // add tracking objective
@@ -198,13 +174,13 @@ int DoMain(int argc, char* argv[]) {
 
   std::vector<int> fsm_states = {BipedStance::kLeft, BipedStance::kRight};
   std::vector<BipedStance> fsm_stances = {BipedStance::kLeft, BipedStance::kRight};
-  std::vector<double> state_durations = {FLAGS_stance_duration, FLAGS_stance_duration};
+  std::vector<double> state_durations = {FLAGS_stance_time, FLAGS_stance_time};
 
   auto fsm = builder.AddSystem<TimeBasedFiniteStateMachine>(
       plant, fsm_states, state_durations);
 
 //  auto warmstarter = builder.AddSystem<LipmWarmStartSystem>(
-//      srb_plant, FLAGS_h_des, FLAGS_stance_duration,
+//      srb_plant, FLAGS_h_des, FLAGS_stance_time,
 //      FLAGS_dt, fsm_states, fsm_stances);
 //
 //  auto liftoff_event_time =
@@ -215,29 +191,18 @@ int DoMain(int argc, char* argv[]) {
   auto mpc_out_publisher = builder.AddSystem(
       LcmPublisherSystem::Make<lcmt_saved_traj>(FLAGS_channel_plan, &lcm_local));
 
-<<<<<<< HEAD
-//  auto mpc_processor = builder.AddSystem<MpcTrajectoryReceiver>(
-//          TrajectoryType::kCubicHermite, TrajectoryType::kCubicHermite, false);
-//  builder.Connect(cmpc->get_output_port(), mpc_processor->get_input_port());
-
-  // Least squares estimator
-  // last bool indicates that we're using the continuous time dynamics.
-  auto lstsq_sys = builder.AddSystem<SRBDResidualEstimator>(srb_plant, 0.01, 200, true, 1.0/2000, true);
-  lstsq_sys->AddMode(left_stance_dynamics_c, BipedStance::kLeft,
-                MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_time / dt));
-  lstsq_sys->AddMode(right_stance_dynamics_c, BipedStance::kRight,
-                MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_time / dt));
+  auto lstsq_sys = builder.AddSystem<SRBDResidualEstimator>(
+      srb_plant, 0.01, 200, true, 1.0/2000.0, true);
+  lstsq_sys->AddMode(left_stance_dynamics, BipedStance::kLeft,
+                     MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_time / dt));
+  lstsq_sys->AddMode(right_stance_dynamics, BipedStance::kRight,
+                     MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_time / dt));
 
   builder.Connect(fsm->get_output_port(), lstsq_sys->get_fsm_input_port());
   builder.Connect(robot_out->get_output_port(), lstsq_sys->get_state_input_port());
   builder.Connect(cmpc->get_output_port(), lstsq_sys->get_mpc_input_port());
-
-  // fsm connections
-  //  builder.Connect(fsm->get_output_port(), fsm_send->get_input_port());
-  //  builder.Connect(fsm_send->get_output_port(), fsm_pub->get_input_port());
-
-=======
->>>>>>> 55af9f6b66141d4db88a79a60a887c367050f253
+  builder.Connect(lstsq_sys->get_residual_output_port(),
+                  cmpc->get_residual_input_port());
   builder.Connect(fsm->get_output_port(), cmpc->get_fsm_input_port());
 //  builder.Connect(fsm->get_output_port(), warmstarter->get_input_port_fsm());
 //  builder.Connect(fsm->get_output_port(),
@@ -275,15 +240,15 @@ int DoMain(int argc, char* argv[]) {
   }  else {
     drake::multibody::MultibodyPlant<double> plant_for_solver(0.0);
     addCassieMultibody(&plant_for_solver, nullptr, true,
-        "examples/Cassie/urdf/cassie_v2.urdf", true, false);
+                       "examples/Cassie/urdf/cassie_v2.urdf", true, false);
     plant_for_solver.Finalize();
     VectorXd q_init, u_init, lambda_init;
     CassieFixedPointSolver(plant_for_solver, FLAGS_h_des, gains.mu,
-                             70, true, FLAGS_stance_width, &q_init, &u_init, &lambda_init);
+                           70, true, FLAGS_stance_width, &q_init, &u_init, &lambda_init);
 
     OutputVector<double> rbt_out_msg(q_init,
-                                   VectorXd::Zero(plant.num_velocities()),
-                                   VectorXd::Zero(plant.num_actuators()));
+                                     VectorXd::Zero(plant.num_velocities()),
+                                     VectorXd::Zero(plant.num_actuators()));
 
     rbt_out_msg.set_timestamp(FLAGS_debug_time);
     auto diagram_ptr = loop.get_diagram();

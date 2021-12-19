@@ -7,21 +7,24 @@
 #include "systems/framework/output_vector.h"
 #include "dairlib/lcmt_saved_traj.hpp"
 #include "lcm/lcm_trajectory.h"
+#include "systems/controllers/mpc/mpc_periodic_residual_manager.h"
 
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using drake::systems::BasicVector;
 using dairlib::systems::OutputVector;
+using dairlib::systems::residual_dynamics;
 
 namespace dairlib::systems {
-SRBDResidualEstimator::SRBDResidualEstimator(const multibody::SingleRigidBodyPlant &plant, double rate,
-                                             unsigned int buffer_len, bool use_fsm, double dt, bool continuous) :
-        plant_(plant),
-        rate_(rate),
-        buffer_len_(buffer_len),
-        use_fsm_(use_fsm),
-        dt_(dt),
-        continuous_(continuous) {
+SRBDResidualEstimator::SRBDResidualEstimator(
+    const multibody::SingleRigidBodyPlant &plant, double rate,
+    unsigned int buffer_len, bool use_fsm, double dt, bool continuous) :
+    plant_(plant),
+    rate_(rate),
+    buffer_len_(buffer_len),
+    use_fsm_(use_fsm),
+    dt_(dt),
+    continuous_(continuous) {
 
   // Initialize data matrices
   X_ = MatrixXd::Zero(buffer_len_, num_X_cols);
@@ -31,51 +34,40 @@ SRBDResidualEstimator::SRBDResidualEstimator(const multibody::SingleRigidBodyPla
 
   // Declare all ports
   state_in_port_ = this->DeclareVectorInputPort(
-                  "x, u, t",
-                  OutputVector<double>(plant_.nq(), plant_.nv(), plant_.nu()))
+          "x, u, t",
+          OutputVector<double>(
+              plant_.nq(),plant_.nv(),plant_.nu()))
           .get_index();
 
-  mpc_in_port_ = this->DeclareAbstractInputPort("mpc_traj_input", drake::Value<lcmt_saved_traj>{}).get_index();
+  mpc_in_port_ = this->DeclareAbstractInputPort(
+      "mpc_traj_input",
+      drake::Value<lcmt_saved_traj>{}).get_index();
 
-  A_hat_port_ = this->DeclareAbstractOutputPort("A_hat",
-                                                &SRBDResidualEstimator::GetAHat).get_index();
-  B_hat_port_ = this->DeclareAbstractOutputPort("B_hat",
-                                                &SRBDResidualEstimator::GetBHat).get_index();
-  b_hat_port_ = this->DeclareAbstractOutputPort("b_hat",
-                                                &SRBDResidualEstimator::GetbHat).get_index();
-
+  residual_out_port_ = this->DeclareAbstractOutputPort(
+      "residuals_out",
+      residual_dynamics{MatrixXd::Zero(0,0),
+                                MatrixXd::Zero(0,0),
+                                VectorXd::Zero(0)},
+      &SRBDResidualEstimator::GetDynamics).get_index();
 
   if (use_fsm_) {
     fsm_port_ = this->DeclareVectorInputPort(
-                    "fsm",
-                    BasicVector<double>(1))
-            .get_index();
+            "fsm",
+            BasicVector<double>(1))
+        .get_index();
 
     current_fsm_state_idx_ =
-            this->DeclareDiscreteState(VectorXd::Zero(1));
+        this->DeclareDiscreteState(VectorXd::Zero(1));
     prev_event_time_idx_ = this->DeclareDiscreteState(-0.1 * VectorXd::Ones(1));
   }
 
 
   DeclarePerStepDiscreteUpdateEvent(&SRBDResidualEstimator::DiscreteVariableUpdate);
   DeclarePeriodicDiscreteUpdateEvent(rate_, 0, &SRBDResidualEstimator::PeriodicUpdate);
-  // ofs_ = std::ofstream("log1_continuous.txt");
-  ofs_ = std::ofstream("log2_continuous.txt");
-  if (!ofs_) {
+  ofs_ = std::ofstream("log2.txt");
+  if (! ofs_) {
     std::cout << "could not log!" << std::endl;
   }
-}
-
-void SRBDResidualEstimator::GetAHat(const drake::systems::Context<double> &context, Eigen::MatrixXd *A_msg) const {
-  *A_msg = cur_A_hat_;
-}
-
-void SRBDResidualEstimator::GetBHat(const drake::systems::Context<double> &context, Eigen::MatrixXd *B_msg) const {
-  *B_msg = cur_B_hat_;
-}
-
-void SRBDResidualEstimator::GetbHat(const drake::systems::Context<double> &context, Eigen::MatrixXd *b_msg) const {
-  *b_msg = cur_b_hat_;
 }
 
 void SRBDResidualEstimator::AddMode(const LinearSrbdDynamics &dynamics,
@@ -87,14 +79,18 @@ void SRBDResidualEstimator::AddMode(const LinearSrbdDynamics &dynamics,
 }
 
 drake::systems::EventStatus SRBDResidualEstimator::PeriodicUpdate(
-        const drake::systems::Context<double> &context,
-        drake::systems::DiscreteValues<double> *discrete_state) const {
+    const drake::systems::Context<double> &context,
+    drake::systems::DiscreteValues<double> *discrete_state) const {
   // Solve least squares only if it's ready.
-  std::cout << "CALLING LEAST SQUARES SOLVE with ticks = " << ticks_ << std::endl;
   if (ticks_ >= buffer_len_) {
     SolveLstSq();
   }
   return drake::systems::EventStatus::Succeeded();
+}
+
+void SRBDResidualEstimator::GetDynamics(const drake::systems::Context<double> &context,
+                                        residual_dynamics *dyn) const {
+  *dyn = residual_dynamics { cur_A_hat_, cur_B_hat_, cur_b_hat_ };
 }
 
 // For now, calling this as a discrete variable update though it doesn't have to be.
@@ -102,7 +98,7 @@ drake::systems::EventStatus
 SRBDResidualEstimator::DiscreteVariableUpdate(const drake::systems::Context<double> &context,
                                               drake::systems::DiscreteValues<double> *discrete_state) const {
   const OutputVector<double> *robot_output =
-          (OutputVector<double> *) this->EvalVectorInput(context, state_in_port_);
+      (OutputVector<double> *) this->EvalVectorInput(context, state_in_port_);
 
   const drake::AbstractValue* mpc_cur_input = this->EvalAbstractInput(context, mpc_in_port_);
   const auto& input_msg = mpc_cur_input->get_value<lcmt_saved_traj>();
@@ -119,17 +115,17 @@ SRBDResidualEstimator::DiscreteVariableUpdate(const drake::systems::Context<doub
 
   // FSM stuff (copied from the srbd_mpc)
   const BasicVector<double> *fsm_output =
-          (BasicVector<double> *) this->EvalVectorInput(context, fsm_port_);
+  (BasicVector<double> *) this->EvalVectorInput(context, fsm_port_);
   VectorXd fsm_state = fsm_output->get_value();
   if (use_fsm_) {
     auto current_fsm_state =
-            discrete_state->get_mutable_vector(current_fsm_state_idx_)
-                    .get_mutable_value();
+        discrete_state->get_mutable_vector(current_fsm_state_idx_)
+            .get_mutable_value();
 
     if (fsm_state(0) != current_fsm_state(0)) {
       current_fsm_state(0) = fsm_state(0);
       discrete_state->get_mutable_vector(prev_event_time_idx_).get_mutable_value()
-              << timestamp;
+          << timestamp;
     }
   }
 
@@ -155,13 +151,15 @@ SRBDResidualEstimator::DiscreteVariableUpdate(const drake::systems::Context<doub
   }
   return drake::systems::EventStatus::Succeeded();
 }
+
 Eigen::VectorXd SRBDResidualEstimator::ComputeYDot(Eigen::MatrixXd state_history) const {
-    if (state_history.cols() < 2) {
-      std::cout << "Error! Need at least 2 states to compute velocity" << std::endl;
-    }
-    Eigen::VectorXd diff = 1/dt_ * (state_history.col(1) - state_history.col(0));
-    return diff;
+  if (state_history.cols() < 2) {
+    std::cout << "Error! Need at least 2 states to compute velocity" << std::endl;
+  }
+  Eigen::VectorXd diff = 1/dt_ * (state_history.col(1) - state_history.col(0));
+  return diff;
 }
+
 
 void SRBDResidualEstimator::UpdateLstSqEquation(Eigen::VectorXd state,
                                                 Eigen::VectorXd input,
@@ -206,7 +204,7 @@ void SRBDResidualEstimator::UpdateLstSqEquation(Eigen::VectorXd state,
   Eigen::VectorXd ydot = ComputeYDot(states);
   // std::cout << "ydot \n" << ydot << std::endl;
   Eigen::VectorXd nominal_deriv = modes_.at(stance_mode).dynamics.A * prev_state_ + modes_.at(stance_mode).dynamics.B * prev_input_ +
-                                  modes_.at(stance_mode).dynamics.b;
+      modes_.at(stance_mode).dynamics.b;
   // std::cout << "prev_state:" << prev_state_ << std::endl;
   // std::cout << "prev_input:" << prev_input_ << std::endl;
   // std::cout << "nominal derivative: " << nominal_deriv << std::endl;
@@ -214,7 +212,7 @@ void SRBDResidualEstimator::UpdateLstSqEquation(Eigen::VectorXd state,
     y_.row(buffer_len_ - 2) = ydot - nominal_deriv;
   } else {
     y_.row(buffer_len_ - 2) =
-            state - nominal_deriv;
+        state - nominal_deriv;
   }
   // std::cout << "last row of y:" << std::endl << y_.row(buffer_len_ - 2)<< std::endl;
   if (ofs_) {
@@ -228,7 +226,7 @@ void SRBDResidualEstimator::UpdateLstSqEquation(Eigen::VectorXd state,
     // debugging step: check if the dynamics of the past state + residual dynamics of past state are close to this state.
 
     Eigen::VectorXd exp_deriv = modes_.at(stance_mode).dynamics.A * prev_state_ + modes_.at(stance_mode).dynamics.B * prev_input_ +
-            modes_.at(stance_mode).dynamics.b;
+        modes_.at(stance_mode).dynamics.b;
     Eigen::VectorXd res_state = cur_A_hat_ * prev_state_ + cur_B_hat_ * prev_input_ + cur_b_hat_;
     std::cout << "-----------------" << std::endl;
     std::cout << "prev_state:" << prev_state_ << std::endl;

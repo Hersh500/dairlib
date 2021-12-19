@@ -85,9 +85,9 @@ DEFINE_string(mpc_channel, "SRBD_MPC_OUT", "channel to recieve koopman mpc messa
 DEFINE_string(
     gains_filename,
     "examples/Cassie/mpc/cassie_mpc_osc_walking_gains.yaml","Filepath containing gains");
-DEFINE_double(swing_ft_height, 0.05, "Swing foot height");
+DEFINE_double(swing_ft_height, 0.08, "Swing foot height");
 DEFINE_double(stance_duration, 0.35, "stance phase duration");
-DEFINE_double(double_stance_duration, 0.075, "double stance phase duration");
+DEFINE_double(double_stance_duration, 0.05, "double stance phase duration");
 DEFINE_bool(track_com, false,
             "use com tracking data (otherwise uses trans space)");
 DEFINE_bool(print_osc_debug, false, "print osc_debug to the terminal");
@@ -106,7 +106,7 @@ int DoMain(int argc, char* argv[]) {
   // Built the MBP
   drake::multibody::MultibodyPlant<double> plant_w_springs(0.0);
   addCassieMultibody(&plant_w_springs, nullptr, true,
-      "examples/Cassie/urdf/cassie_v2.urdf", true, false);
+                     "examples/Cassie/urdf/cassie_v2.urdf", true, false);
   plant_w_springs.Finalize();
 
   // Get contact frames and position (doesn't matter whether we use
@@ -165,7 +165,7 @@ int DoMain(int argc, char* argv[]) {
 
   std::vector<std::pair<const Eigen::Vector3d,
                         const drake::multibody::Frame<double>&>>
-                        left_right_pts = {left_toe_mid, right_toe_mid};
+      left_right_pts = {left_toe_mid, right_toe_mid};
 
   /**** Initialize all the leaf systems ****/
   drake::lcm::DrakeLcm lcm_local;
@@ -197,8 +197,8 @@ int DoMain(int argc, char* argv[]) {
   int post_left_double_support_state = BipedStance::kLeft + 2;
   int post_right_double_support_state = BipedStance::kRight + 2;
   double single_support_duration = FLAGS_is_double_stance ?
-      FLAGS_stance_duration - FLAGS_double_stance_duration :
-      FLAGS_stance_duration;
+                                   FLAGS_stance_duration - FLAGS_double_stance_duration :
+                                   FLAGS_stance_duration;
 
   vector<int> fsm_states;
   vector<double> state_durations;
@@ -238,7 +238,7 @@ int DoMain(int argc, char* argv[]) {
   MatrixXd Q_accel = gains.w_accel * MatrixXd::Identity(nv, nv);
   osc->SetAccelerationCostForAllJoints(Q_accel);
 
-   // Constraints in OSC
+  // Constraints in OSC
   multibody::KinematicEvaluatorSet<double> evaluators(plant_w_springs);
   // 1. fourbar constraint
   auto left_loop = LeftLoopClosureEvaluator(plant_w_springs);
@@ -348,9 +348,9 @@ int DoMain(int argc, char* argv[]) {
       gains.W_swing_foot, plant_w_springs, plant_w_springs);
 
   swing_foot_traj.AddStateAndPointToTrack(BipedStance::kLeft,
-      "toe_right", right_toe_mid.first);
+                                          "toe_right", right_toe_mid.first);
   swing_foot_traj.AddStateAndPointToTrack(BipedStance::kRight,
-      "toe_left", left_toe_mid.first);
+                                          "toe_left", left_toe_mid.first);
   osc->AddTrackingData(&swing_foot_traj);
 
 
@@ -359,7 +359,7 @@ int DoMain(int argc, char* argv[]) {
   com_traj.AddFiniteStateToTrack(-1);
 
   TransTaskSpaceTrackingData pelvis_traj("com_traj", gains.K_p_com,
-                                        gains.K_d_com, gains.W_com, plant_w_springs, plant_w_springs);
+                                         gains.K_d_com, gains.W_com, plant_w_springs, plant_w_springs);
   pelvis_traj.AddPointToTrack("pelvis", com_offset);
 
   if (FLAGS_track_com) {
@@ -369,8 +369,8 @@ int DoMain(int argc, char* argv[]) {
   }
 
   RpyTaskSpaceTrackingData angular_traj("orientation_traj", gains.K_p_orientation,
-                                      gains.K_d_orientation, gains.W_orientation,
-                                      plant_w_springs, plant_w_springs);
+                                        gains.K_d_orientation, gains.W_orientation,
+                                        plant_w_springs, plant_w_springs);
 
   angular_traj.AddFrameToTrack("pelvis");
 
@@ -408,10 +408,10 @@ int DoMain(int argc, char* argv[]) {
                   mpc_reciever->get_input_port());
   builder.Connect(mpc_reciever->get_com_traj_output_port(),
                   osc->get_tracking_data_input_port("com_traj"));
-  builder.Connect(zero_rot_traj_source->get_output_port(),
-                  osc->get_tracking_data_input_port("orientation_traj"));
-//  builder.Connect(mpc_reciever->get_angular_traj_output_port(),
+//  builder.Connect(zero_rot_traj_source->get_output_port(),
 //                  osc->get_tracking_data_input_port("orientation_traj"));
+  builder.Connect(mpc_reciever->get_angular_traj_output_port(),
+                  osc->get_tracking_data_input_port("orientation_traj"));
   builder.Connect(mpc_reciever->get_swing_ft_target_output_port(),
                   swing_foot_traj_gen->get_input_port_foot_target());
   builder.Connect(fsm->get_output_port(),
