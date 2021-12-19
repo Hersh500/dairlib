@@ -8,6 +8,7 @@
 #include "dairlib/lcmt_saved_traj.hpp"
 #include "lcm/lcm_trajectory.h"
 #include "systems/controllers/mpc/mpc_periodic_residual_manager.h"
+#include "common/eigen_utils.h"
 
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
@@ -50,7 +51,7 @@ SRBDSparseResidualEstimator::SRBDSparseResidualEstimator(
           "x, u, t",
           OutputVector<double>(
               plant_.nq(),plant_.nv(),plant_.nu()))
-          .get_index();
+      .get_index();
 
   mpc_in_port_ = this->DeclareAbstractInputPort(
       "mpc_traj_input",
@@ -59,9 +60,12 @@ SRBDSparseResidualEstimator::SRBDSparseResidualEstimator(
   residual_out_port_ = this->DeclareAbstractOutputPort(
       "residuals_out",
       residual_dynamics{MatrixXd::Zero(0,0),
-                                MatrixXd::Zero(0,0),
-                                VectorXd::Zero(0)},
+                        MatrixXd::Zero(0,0),
+                        VectorXd::Zero(0)},
       &SRBDSparseResidualEstimator::GetDynamics).get_index();
+
+  residual_debug_out_port_ = this->DeclareAbstractOutputPort(
+      "residual_lcm_out", &SRBDSparseResidualEstimator::GetDynamicsLcm).get_index();
 
   if (use_fsm_) {
     fsm_port_ = this->DeclareVectorInputPort(
@@ -84,7 +88,7 @@ SRBDSparseResidualEstimator::SRBDSparseResidualEstimator(
 }
 
 void SRBDSparseResidualEstimator::AddMode(const LinearSrbdDynamics &dynamics,
-                                    BipedStance stance, const MatrixXd &reset, int N) {
+                                          BipedStance stance, const MatrixXd &reset, int N) {
   DRAKE_DEMAND(stance == nmodes_);
   SrbdMode mode = {dynamics, reset, stance, N};
   modes_.push_back(mode);
@@ -102,14 +106,33 @@ drake::systems::EventStatus SRBDSparseResidualEstimator::PeriodicUpdate(
 }
 
 void SRBDSparseResidualEstimator::GetDynamics(const drake::systems::Context<double> &context,
-                                        residual_dynamics *dyn) const {
+                                              residual_dynamics *dyn) const {
   *dyn = residual_dynamics { cur_A_hat_, cur_B_hat_, cur_b_hat_ };
+}
+
+void SRBDSparseResidualEstimator::GetDynamicsLcm(
+    const drake::systems::Context<double> &context,
+    lcmt_residual_dynamics *dyn_lcm) const {
+  int nx = cur_A_hat_.rows();
+  int nu = cur_B_hat_.cols();
+  int npx = cur_A_hat_.cols();
+  dyn_lcm->utime = context.get_time() * 1e6;
+  dyn_lcm->nx = nx;
+  dyn_lcm->nu = nu;
+  dyn_lcm->npx = npx;
+  dyn_lcm->A = std::vector<std::vector<double>>(nx);
+  dyn_lcm->B = std::vector<std::vector<double>>(nx);
+  for (int i = 0; i < nx; i++) {
+    dyn_lcm->A.at(i) = CopyVectorXdToStdVector(cur_A_hat_.row(i).transpose());
+    dyn_lcm->B.at(i) = CopyVectorXdToStdVector(cur_B_hat_.row(i).transpose());
+  }
+  dyn_lcm->b = CopyVectorXdToStdVector(cur_b_hat_);
 }
 
 // For now, calling this as a discrete variable update though it doesn't have to be.
 drake::systems::EventStatus
 SRBDSparseResidualEstimator::DiscreteVariableUpdate(const drake::systems::Context<double> &context,
-                                              drake::systems::DiscreteValues<double> *discrete_state) const {
+                                                    drake::systems::DiscreteValues<double> *discrete_state) const {
   const OutputVector<double> *robot_output =
       (OutputVector<double> *) this->EvalVectorInput(context, state_in_port_);
 
@@ -119,7 +142,9 @@ SRBDSparseResidualEstimator::DiscreteVariableUpdate(const drake::systems::Contex
   Eigen::VectorXd u_nom;
   if (lcm_traj.GetTrajectoryNames().size() > 0) {
     LcmTrajectory::Trajectory input_traj = lcm_traj.GetTrajectory("input_traj");
-    u_nom = input_traj.datapoints.col(0);
+    double s = (context.get_time() - input_traj.time_vector(0)) /
+        (input_traj.time_vector(1) - input_traj.time_vector(0));
+    u_nom = (1.0 - s) * input_traj.datapoints.col(0) + s * input_traj.datapoints.col(1);
   } else {
     u_nom = Eigen::VectorXd::Zero(nu_);
   }
@@ -175,9 +200,9 @@ Eigen::VectorXd SRBDSparseResidualEstimator::ComputeYDot(Eigen::MatrixXd state_h
 
 
 void SRBDSparseResidualEstimator::UpdateLstSqEquation(Eigen::VectorXd state,
-                                                Eigen::VectorXd input,
-                                                Eigen::Vector3d stance_foot_loc,
-                                                BipedStance stance_mode) const {
+                                                      Eigen::VectorXd input,
+                                                      Eigen::Vector3d stance_foot_loc,
+                                                      BipedStance stance_mode) const {
   VectorXd vec_joined(nx_ + 3);
   vec_joined << state, stance_foot_loc;
   // Rotate X and y up by a row.
@@ -335,3 +360,6 @@ void SRBDSparseResidualEstimator::SolveLstSq() const {
 }
 
 }
+//
+// Created by brian on 12/19/21.
+//

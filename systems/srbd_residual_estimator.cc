@@ -6,8 +6,10 @@
 #include "srbd_residual_estimator.h"
 #include "systems/framework/output_vector.h"
 #include "dairlib/lcmt_saved_traj.hpp"
+#include "dairlib/lcmt_residual_dynamics.hpp"
 #include "lcm/lcm_trajectory.h"
 #include "systems/controllers/mpc/mpc_periodic_residual_manager.h"
+#include "common/eigen_utils.h"
 
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
@@ -49,6 +51,9 @@ SRBDResidualEstimator::SRBDResidualEstimator(
                                 MatrixXd::Zero(0,0),
                                 VectorXd::Zero(0)},
       &SRBDResidualEstimator::GetDynamics).get_index();
+
+  residual_debug_out_port_ = this->DeclareAbstractOutputPort(
+      "residual_lcm_out", &SRBDResidualEstimator::GetDynamicsLcm).get_index();
 
   if (use_fsm_) {
     fsm_port_ = this->DeclareVectorInputPort(
@@ -93,6 +98,25 @@ void SRBDResidualEstimator::GetDynamics(const drake::systems::Context<double> &c
   *dyn = residual_dynamics { cur_A_hat_, cur_B_hat_, cur_b_hat_ };
 }
 
+void SRBDResidualEstimator::GetDynamicsLcm(
+    const drake::systems::Context<double> &context,
+    lcmt_residual_dynamics *dyn_lcm) const {
+  int nx = cur_A_hat_.rows();
+  int nu = cur_B_hat_.cols();
+  int npx = cur_A_hat_.cols();
+  dyn_lcm->utime = context.get_time() * 1e6;
+  dyn_lcm->nx = nx;
+  dyn_lcm->nu = nu;
+  dyn_lcm->npx = npx;
+  dyn_lcm->A = std::vector<std::vector<double>>(nx);
+  dyn_lcm->B = std::vector<std::vector<double>>(nx);
+  for (int i = 0; i < nx; i++) {
+    dyn_lcm->A.at(i) = CopyVectorXdToStdVector(cur_A_hat_.row(i).transpose());
+    dyn_lcm->B.at(i) = CopyVectorXdToStdVector(cur_B_hat_.row(i).transpose());
+  }
+  dyn_lcm->b = CopyVectorXdToStdVector(cur_b_hat_);
+}
+
 // For now, calling this as a discrete variable update though it doesn't have to be.
 drake::systems::EventStatus
 SRBDResidualEstimator::DiscreteVariableUpdate(const drake::systems::Context<double> &context,
@@ -106,7 +130,9 @@ SRBDResidualEstimator::DiscreteVariableUpdate(const drake::systems::Context<doub
   Eigen::VectorXd u_nom;
   if (lcm_traj.GetTrajectoryNames().size() > 0) {
     LcmTrajectory::Trajectory input_traj = lcm_traj.GetTrajectory("input_traj");
-    u_nom = input_traj.datapoints.col(0);
+    double s = (context.get_time() - input_traj.time_vector(0)) /
+        (input_traj.time_vector(1) - input_traj.time_vector(0));
+    u_nom = (1.0 - s) * input_traj.datapoints.col(0) + s * input_traj.datapoints.col(1);
   } else {
     u_nom = Eigen::VectorXd::Zero(nu_);
   }

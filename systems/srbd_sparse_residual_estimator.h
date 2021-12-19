@@ -3,6 +3,7 @@
 #include "drake/systems/framework/leaf_system.h"
 #include "systems/controllers/mpc/srbd_cmpc.h"
 #include "multibody/single_rigid_body_plant.h"
+#include "dairlib/lcmt_residual_dynamics.hpp"
 #include <fstream>
 
 namespace dairlib::systems {
@@ -11,8 +12,8 @@ namespace dairlib::systems {
 class SRBDSparseResidualEstimator : public drake::systems::LeafSystem<double> {
  public:
   SRBDSparseResidualEstimator(const multibody::SingleRigidBodyPlant &plant,
-                        double rate, unsigned int buffer_len,
-                        bool use_fsm, double dt, double trans_reg, double rot_reg);
+                              double rate, unsigned int buffer_len,
+                              bool use_fsm, double dt, double trans_reg, double rot_reg);
 
   // Want to connect this to a callback that adds the state to a deque
   const drake::systems::InputPort<double> &get_state_input_port() const {
@@ -30,6 +31,10 @@ class SRBDSparseResidualEstimator : public drake::systems::LeafSystem<double> {
   const drake::systems::OutputPort<double> &get_residual_output_port() const {
     return this->get_output_port(residual_out_port_);
   };
+
+  const drake::systems::OutputPort<double> &get_residual_debug_port() const {
+    return this->get_output_port(residual_debug_out_port_);
+  }
 
   void AddMode(
       const LinearSrbdDynamics &dynamics,
@@ -59,6 +64,7 @@ class SRBDSparseResidualEstimator : public drake::systems::LeafSystem<double> {
 
   int state_in_port_,
       residual_out_port_,
+      residual_debug_out_port_,
       fsm_port_,
       mpc_in_port_;
 
@@ -107,6 +113,8 @@ class SRBDSparseResidualEstimator : public drake::systems::LeafSystem<double> {
 
   void GetDynamics(const drake::systems::Context<double>& context,
                    residual_dynamics* dyn) const;
+  void GetDynamicsLcm(const drake::systems::Context<double>& context,
+                      lcmt_residual_dynamics* dyn_lcm) const;
 
 };
 }

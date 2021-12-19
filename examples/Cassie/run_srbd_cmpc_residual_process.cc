@@ -23,7 +23,7 @@
 #include "examples/Cassie/mpc/cassie_srbd_cmpc_gains.h"
 #include "examples/Cassie/cassie_utils.h"
 #include "examples/Cassie/cassie_fixed_point_solver.h"
-#include "systems/srbd_residual_estimator.h"
+#include "systems/srbd_sparse_residual_estimator.h"
 #include "systems/controllers/mpc/mpc_trajectory_reciever.h"
 
 namespace dairlib {
@@ -34,7 +34,7 @@ using systems::LcmDrivenLoop;
 using systems::OutputVector;
 using systems::LipmWarmStartSystem;
 using systems::FiniteStateMachineEventTime;
-using systems::SRBDResidualEstimator;
+using systems::SRBDSparseResidualEstimator;
 using multibody::SingleRigidBodyPlant;
 
 
@@ -56,14 +56,15 @@ using Eigen::VectorXd;
 using Eigen::MatrixXd;
 using Eigen::Matrix3d;
 
+DEFINE_int32(buffer_len, 50, "length of the least squares buffer");
 DEFINE_string(gains_filename, "examples/Cassie/mpc/cassie_srbd_cmpc_gains.yaml", "convex mpc gains file");
 DEFINE_string(channel_x, "CASSIE_STATE_SIMULATION", "channel to publish/receive cassie state");
 DEFINE_string(channel_plan, "SRBD_MPC_OUT", "channel to publish plan trajectory");
 DEFINE_string(channel_fsm, "FSM", "the name of the channel with the time-based fsm");
-DEFINE_double(stance_time, 0.35, "duration of each stance phase");
 DEFINE_bool(debug_mode, false, "Manually set MPC values to debug");
 DEFINE_bool(use_com, false, "Use center of mass or a point to track CM location");
 DEFINE_bool(print_diagram, false, "print block diagram");
+DEFINE_double(stance_time, 0.35, "duration of each stance phase");
 DEFINE_double(debug_time, 0.00, "time to simulate system at");
 DEFINE_double(stance_width, 0.0, "stance width to use in dynamics linearization");
 DEFINE_double(v_des, 0.0, "desired walking speed");
@@ -190,9 +191,12 @@ int DoMain(int argc, char* argv[]) {
   auto robot_out = builder.AddSystem<RobotOutputReceiver>(plant);
   auto mpc_out_publisher = builder.AddSystem(
       LcmPublisherSystem::Make<lcmt_saved_traj>(FLAGS_channel_plan, &lcm_local));
+  auto residual_debug_publisher = builder.AddSystem(
+      LcmPublisherSystem::Make<lcmt_residual_dynamics>(
+          "CASSIE_SRBD_RESIDUAL_DYNAMICS", &lcm_local));
 
-  auto lstsq_sys = builder.AddSystem<SRBDResidualEstimator>(
-      srb_plant, 0.01, 200, true, 1.0/2000.0, true);
+  auto lstsq_sys = builder.AddSystem<SRBDSparseResidualEstimator>(
+      srb_plant, 0.01, FLAGS_buffer_len, true, 1.0/2000, 0.1, 0.1);
   lstsq_sys->AddMode(left_stance_dynamics, BipedStance::kLeft,
                      MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_time / dt));
   lstsq_sys->AddMode(right_stance_dynamics, BipedStance::kRight,
@@ -203,6 +207,8 @@ int DoMain(int argc, char* argv[]) {
   builder.Connect(cmpc->get_output_port(), lstsq_sys->get_mpc_input_port());
   builder.Connect(lstsq_sys->get_residual_output_port(),
                   cmpc->get_residual_input_port());
+  builder.Connect(lstsq_sys->get_residual_debug_port(),
+                  residual_debug_publisher->get_input_port());
   builder.Connect(fsm->get_output_port(), cmpc->get_fsm_input_port());
 //  builder.Connect(fsm->get_output_port(), warmstarter->get_input_port_fsm());
 //  builder.Connect(fsm->get_output_port(),
