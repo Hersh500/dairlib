@@ -201,7 +201,7 @@ int DoMain(int argc, char* argv[]) {
 
   // Least squares estimator
   // last bool indicates that we're using the continuous time dynamics.
-  auto lstsq_sys = builder.AddSystem<SRBDSparseResidualEstimator>(srb_plant, 0.01, 200, true, 1.0/2000);
+  auto lstsq_sys = builder.AddSystem<SRBDSparseResidualEstimator>(srb_plant, 0.01, 200, true, 1.0/2000, 0.1, 0.1);
   lstsq_sys->AddMode(left_stance_dynamics, BipedStance::kLeft,
                 MatrixXd::Identity(nx, nx), std::round(FLAGS_stance_duration / dt));
   lstsq_sys->AddMode(right_stance_dynamics, BipedStance::kRight,

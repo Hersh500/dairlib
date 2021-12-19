@@ -12,7 +12,7 @@ class SRBDSparseResidualEstimator : public drake::systems::LeafSystem<double> {
  public:
   SRBDSparseResidualEstimator(const multibody::SingleRigidBodyPlant &plant,
                         double rate, unsigned int buffer_len,
-                        bool use_fsm, double dt);
+                        bool use_fsm, double dt, double trans_reg, double rot_reg);
 
   // Want to connect this to a callback that adds the state to a deque
   const drake::systems::InputPort<double> &get_state_input_port() const {
@@ -69,7 +69,7 @@ class SRBDSparseResidualEstimator : public drake::systems::LeafSystem<double> {
 
   bool use_fsm_;
   double dt_;
-  bool continuous_;
+  double trans_reg_, rot_reg_;
   mutable unsigned int ticks_ = 0;
   std::vector<dairlib::SrbdMode> modes_;
   int nmodes_ = 0;

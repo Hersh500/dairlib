@@ -19,12 +19,14 @@ namespace dairlib::systems {
 // Currently only setup for continuous time.
 SRBDSparseResidualEstimator::SRBDSparseResidualEstimator(
     const multibody::SingleRigidBodyPlant &plant, double rate,
-    unsigned int buffer_len, bool use_fsm, double dt) :
+    unsigned int buffer_len, bool use_fsm, double dt, double trans_reg, double rot_reg) :
     plant_(plant),
     rate_(rate),
     buffer_len_(buffer_len),
     use_fsm_(use_fsm),
-    dt_(dt) {
+    dt_(dt),
+    trans_reg_(trans_reg),
+    rot_reg_(rot_reg) {
 
   // screw code reusability amirite
   // A_1 x[6:9]
@@ -280,20 +282,18 @@ void SRBDSparseResidualEstimator::SolveLstSq() const {
   Eigen::MatrixXd y_c2 = y_2.block(0, 0, buffer_len_ - 1, state_block_size);
   Eigen::MatrixXd A2 = (X_c2.transpose() * X_c2).colPivHouseholderQr().solve(X_c2.transpose() * y_c2).transpose();
 
-  MatrixXd reg3 = 0.1 * MatrixXd::Identity(X_cols[2], X_cols[2]);
+  MatrixXd reg3 = trans_reg_ * MatrixXd::Identity(X_cols[2], X_cols[2]);
   Eigen::MatrixXd X_c3 = X_3.block(0, 0, buffer_len_ - 1, X_cols[2]);
   Eigen::MatrixXd y_c3 = y_3.block(0, 0, buffer_len_ - 1, state_block_size);
   Eigen::MatrixXd soln3 = (X_c3.transpose() * X_c3 + reg3).colPivHouseholderQr().solve(X_c3.transpose() * y_c3).transpose();
-  std::cout << "soln3 shape:" << soln3.rows() << ", " << soln3.cols() << std::endl;
   // Slice out the appropriate parts of the solution
   Eigen::MatrixXd B1 = soln3.block(0, 0, 3, 3);
   Eigen::MatrixXd b1 = soln3.block(0, 3, 3, 1);
 
-  MatrixXd reg4 = 0.1 * MatrixXd::Identity(X_cols[3], X_cols[3]);
+  MatrixXd reg4 = rot_reg_ * MatrixXd::Identity(X_cols[3], X_cols[3]);
   Eigen::MatrixXd X_c4 = X_3.block(0, 0, buffer_len_ - 1, X_cols[3]);
   Eigen::MatrixXd y_c4 = y_3.block(0, 0, buffer_len_ - 1, state_block_size);
   Eigen::MatrixXd soln4 = (X_c4.transpose() * X_c4 + reg4).colPivHouseholderQr().solve(X_c4.transpose() * y_c4).transpose();
-  std::cout << "soln4 shape:" << soln4.rows() << ", " << soln4.cols() << std::endl;
 
   MatrixXd A3 = soln4.block(0, 0, 3, 3);
   MatrixXd A4 = soln4.block(0, 3, 3, 3);
