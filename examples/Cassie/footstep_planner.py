@@ -4,12 +4,15 @@ import lcm
 import numpy as np
 import argparse
 from skimage import filters
-from scipy.spatial import KDTree
 import threading
+# pip install pytransform3d
 from pytransform3d import transformations as pt
 from pytransform3d import rotations as pr
+from PIL import Image
 import queue
 from dairlib import lcmt_saved_traj, lcmt_robot_output, lcmt_image_array, lcmt_trajectory_block
+import time
+import warnings
 
 
 # Communicates with MPC over LCM
@@ -86,17 +89,18 @@ def depthImgtoPoints(image, K, c2w):
 
 
 def pointToUV(p_w, K, w2c):
+    p_w = np.concatenate([p_w, [1]])
     p_c = pt.transform(w2c, p_w)
     p_im = K@p_c[0:3]/p_c[2]
     return p_im
 
 def computeEdgeMap(image):
-    gradients = filters.sobel(image, mode = "same")
+    gradients = filters.sobel(image, mode = "reflect")
     return gradients
 
 
 def processImage(image, K, c2w):
-    points_image = depthImgtoPoints(image, K, body_pq, c2b)
+    points_image = depthImgtoPoints(image, K, c2w)
     edges = np.expand_dims(computeEdgeMap(image), axis = 2)
     all_feats = np.concatenate([points_image, edges], axis = 2)
     return all_feats
@@ -141,6 +145,7 @@ def findNearestSafeLocation(uv, all_feats, z_bounds, gradient_max = 0.1, safety_
 #   If it is fine, then query the point cloud to get the true z value of the step,
 #   and output the planned (x,y,z) location in an lcmt_saved_traj.
 def main():
+    warnings.filterwarnings("ignore")
     parser = argparse.ArgumentParser(description='Receive step locations and check them.')
     parser.add_argument('--low_lim', 
                         type=float,
@@ -183,7 +188,7 @@ def main():
             if image is None:
                 image = interface.image_queue.get(block = True)
                 points = processImage(image, K, c2w)
-            elif len(interface.image_queue) > 0:
+            elif not interface.image_queue.empty():
                 image = interface.image_queue.get()
                 points = processImage(image, K, c2w)
 
@@ -204,7 +209,9 @@ def main():
             block.trajectory_name = "footstep_adj"
             block.num_points = 1
             block.num_datatypes = 3
-            block.datapoints = list(best_step_loc.T)
+            block.time_vec = [1]
+            block.datapoints = np.expand_dims(best_step_loc, axis = 1).tolist()
+            block.datatypes = ["double", "double", "double"]
             msg.trajectories = [block]
             msg.trajectory_names = ["footstep_adj"]
             interface.lc.publish("FOOTSTEP_PLANNER_OUT", msg.encode())

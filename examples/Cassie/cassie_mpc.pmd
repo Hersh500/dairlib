@@ -81,6 +81,12 @@ group "4.lcm-tools" {
     }
 }
 
+group "5.python-scripts" {
+    cmd "1.footstep-planner" {
+        exec = "bazel-bin/examples/Cassie/footstep_planner";
+        host = "localhost";
+    }
+}
 
 script "cassie_walking" {
     stop cmd "1.simulator-floating" wait "stopped";
