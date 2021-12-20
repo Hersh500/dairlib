@@ -195,11 +195,12 @@ def main():
             # If it's out of the image frame, we can't do anything.
             im_coords = pointToUV(nom_step, K, pt.invert_transform(c2w))
             if im_coords[0] < 0 or im_coords[1] < 0 or im_coords[1] > 128 or im_coords[0] > 128:
+                print("Nominal footstep is outside of image bounds!")
                 best_step_loc = nom_step
             else:
                 diffs = np.linalg.norm(points[:,:,0:2] - nom_step[0:2], axis = 2)
-                best_uv = numpy.unravel_index(diffs.argmin(), diffs.shape)
-                best_step_loc = findNearestSafeLocation(best_uv, all_feats, (body_z - leg_length - z_low, body_z - leg_length + z_high), edge_mag)
+                best_uv = np.unravel_index(diffs.argmin(), diffs.shape)
+                best_step_loc = findNearestSafeLocation(best_uv, points, (body_z - leg_length - z_low, body_z - leg_length + z_high), edge_mag)
 
             print(f"Footstep Planner: Moving location to {best_step_loc}")
             # build output message
