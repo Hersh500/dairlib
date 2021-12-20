@@ -84,21 +84,23 @@ def depthImgtoPoints(image, K, c2w):
     return points
 
 
+def pointToUV(p_w, K, w2c):
+    p_c = pt.transform(w2c, p_w)
+    p_im = K@p_c[0:3]/p_c[2]
+    return p_im
+
 def computeEdgeMap(image):
     gradients = filters.sobel(image, mode = "same")
     return gradients
 
 
-def processImage(image, K, body_pq, c2b):
-    c2w = pt.concat(c2b, pt.transform_from_pq(body_pq))
+def processImage(image, K, c2w):
     points_image = depthImgtoPoints(image, K, body_pq, c2b)
     edges = np.expand_dims(computeEdgeMap(image), axis = 2)
     all_feats = np.concatenate([points_image, edges], axis = 2)
     return all_feats
 
 
-# spiral search to find the nearest safe step location
-# u, v is the location in the array of the nearest point with a known height 
 # TODO(hersh500): figure out reasonable gradient values.
 def findNearestSafeLocation(uv, all_feats, z_bounds, gradient_max = 0.1, safety_radius = 5):
     def is_good(u, v):
@@ -162,15 +164,23 @@ def main():
             # wait till we get a nominal step from MPC and a state
             nom_step = interface.traj_queue.get(block = True)
             state = interface.state_queue.get(block = True)
+            c2w = pt.concat(c2b, pt.transform_from_pq(state))
             body_z = state[2]
             if image is None:
                 image = interface.image_queue.get(block = True)
+                points = processImage(image, K, c2w)
             elif len(interface.image_queue) > 0:
                 image = interface.image_queue.get()
-            points = processImage(image, K, state, c2b)
-            diffs = np.linalg.norm(points[:,:,0:2] - nom_step[0:2], axis = 2)
-            best_uv = numpy.unravel_index(diffs.argmin(), diffs.shape)
-            best_step_loc = findNearestSafeLocation(best_uv, all_feats, z_bounds = (body_z - leg_length - z_low, body_z - leg_length + z_high), edge_mag)
+                points = processImage(image, K, c2w)
+
+            # If it's out of the image frame, we can't do anything.
+            im_coords = pointToUV(nom_step, K, pt.invert_transform(c2w))
+            if im_coords[0] < 0 or im_coords[1] < 0 or im_coords[1] > 128 or im_coords[0] > 128:
+                best_step_loc = nom_step
+            else:
+                diffs = np.linalg.norm(points[:,:,0:2] - nom_step[0:2], axis = 2)
+                best_uv = numpy.unravel_index(diffs.argmin(), diffs.shape)
+                best_step_loc = findNearestSafeLocation(best_uv, all_feats, z_bounds = (body_z - leg_length - z_low, body_z - leg_length + z_high), edge_mag)
 
             # build output message
             msg = lcmt_saved_traj() 
