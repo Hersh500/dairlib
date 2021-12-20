@@ -241,6 +241,24 @@ cc_binary(
 )
 
 cc_binary(
+    name = "multibody_sim_w_cam",
+    srcs = ["multibody_sim_w_cam.cc"],
+    deps = [
+        ":terrain_utils",
+        ":camera_utils",
+        ":cassie_encoder",
+        ":cassie_fixed_point_solver",
+        ":cassie_urdf",
+        ":cassie_utils",
+        "//systems:robot_lcm_systems",
+        "//systems/framework:lcm_driven_loop",
+        "//systems/primitives",
+        "@drake//:drake_shared_library",
+        "@gflags",
+    ],
+)
+
+cc_binary(
     name = "rl_multibody_sim",
     srcs = ["rl_multibody_sim.cc"],
     deps = [

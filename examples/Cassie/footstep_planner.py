@@ -9,7 +9,7 @@ import threading
 from pytransform3d import transformations as pt
 from pytransform3d import rotations as pr
 import queue
-from dairlib import lcmt_saved_traj, lcmt_robot_out, lcmt_image_array, lcmt_trajectory_block
+from dairlib import lcmt_saved_traj, lcmt_robot_output, lcmt_image_array, lcmt_trajectory_block
 
 
 # Communicates with MPC over LCM
@@ -32,10 +32,11 @@ class MPCInterface:
 
     def lcm_listener(self):
         while True:
-            lc.handle() 
-            if stop_listener.is_set():
+            self.lc.handle() 
+            # this stopping mechanism isn't working...
+            if self.stop_listener.is_set():
                 break
-            time.sleep(0.01)
+            time.sleep(0.02)
 
 
     # Handling function for depth image messages
@@ -55,7 +56,7 @@ class MPCInterface:
 
 
     # Handler to get the nominal foot locations from the trajectory
-    def trajectory_handler(self, channel, data):
+    def traj_handler(self, channel, data):
         msg = lcmt_saved_traj.decode(data)
         if msg.num_trajectories > 0:
             sft = msg.trajectories[list(msg.trajectory_names).index("swing_foot_traj")]
@@ -73,7 +74,7 @@ class MPCInterface:
 
 
 def depthImgtoPoints(image, K, c2w):
-    points = np.zeros((image.shape[0], image.shape[1], 3)
+    points = np.zeros((image.shape[0], image.shape[1], 3))
     for u in range(image.shape[0]):
         for v in range(image.shape[1]):
             z_val = image[u, v]
@@ -141,13 +142,25 @@ def findNearestSafeLocation(uv, all_feats, z_bounds, gradient_max = 0.1, safety_
 #   and output the planned (x,y,z) location in an lcmt_saved_traj.
 def main():
     parser = argparse.ArgumentParser(description='Receive step locations and check them.')
-    parser.add_argument('low_lim', type=float, help='the low limit for step z deviation from 0', default = 0.1)
-    parser.add_argument('high_lim', type=float, help='the high limit for step z deviation from 0', default = 0.2)
-    parser.add_argument('edge_mag', type=float, help='the limit for safe edge magnitude', default = 0.1)
+    parser.add_argument('--low_lim', 
+                        type=float,
+                        help='the low limit for step z deviation from 0',
+                        required = False,
+                        default = 0.1)
+    parser.add_argument('--high_lim',
+                        type=float,
+                        help='the high limit for step z deviation from 0',
+                        required = False,
+                        default = 0.2)
+    parser.add_argument('--edge_mag',
+                        type=float,
+                        help='the limit for safe edge magnitude',
+                        required = False,
+                        default = 0.1)
     args = parser.parse_args()
-    z_low = parser.low_lim
-    z_high = parser.low_lim
-    edge_mag = parser.edge_mag
+    z_low = args.low_lim
+    z_high = args.high_lim
+    edge_mag = args.edge_mag
 
     c_x, c_y = 64, 64
     f_x, f_y = 100,100
@@ -159,6 +172,7 @@ def main():
     leg_length = 0.8
     image = None
 
+    interface = MPCInterface("CASSIE_STATE_SIMULATION", "DRAKE_RGBD_CAMERA_IMAGES", "SRBD_MPC_OUT")
     while True:
         try:
             # wait till we get a nominal step from MPC and a state
@@ -180,8 +194,9 @@ def main():
             else:
                 diffs = np.linalg.norm(points[:,:,0:2] - nom_step[0:2], axis = 2)
                 best_uv = numpy.unravel_index(diffs.argmin(), diffs.shape)
-                best_step_loc = findNearestSafeLocation(best_uv, all_feats, z_bounds = (body_z - leg_length - z_low, body_z - leg_length + z_high), edge_mag)
+                best_step_loc = findNearestSafeLocation(best_uv, all_feats, (body_z - leg_length - z_low, body_z - leg_length + z_high), edge_mag)
 
+            print(f"Footstep Planner: Moving location to {best_step_loc}")
             # build output message
             msg = lcmt_saved_traj() 
             msg.num_trajectories = 1
@@ -195,6 +210,7 @@ def main():
             interface.lc.publish("FOOTSTEP_PLANNER_OUT", msg.encode())
         except KeyboardInterrupt:
             interface.stop_listener.set()
+            break
 
 if __name__ == "__main__":
     main()
