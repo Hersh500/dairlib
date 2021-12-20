@@ -138,23 +138,39 @@ def findNearestSafeLocation(uv, all_feats, z_bounds, gradient_max = 0.1, safety_
 #   If it is fine, then query the point cloud to get the true z value of the step,
 #   and output the planned (x,y,z) location in an lcmt_saved_traj.
 def main():
-    image = None
+    parser = argparse.ArgumentParser(description='Receive step locations and check them.')
+    parser.add_argument('low_lim', type=float, help='the low limit for step z deviation from 0', default = 0.1)
+    parser.add_argument('high_lim', type=float, help='the high limit for step z deviation from 0', default = 0.2)
+    parser.add_argument('edge_mag', type=float, help='the limit for safe edge magnitude', default = 0.1)
+    args = parser.parse_args()
+    z_low = parser.low_lim
+    z_high = parser.low_lim
+    edge_mag = parser.edge_mag
+
+    c_x, c_y = 64, 64
+    f_x, f_y = 100,100
+    K = np.array([[f_x, 0, c_x],
+                  [0, f_y, c_y],
+                  [0, 0, 1]])
     camera_rot = pr.active_matrix_from_extrinsic_roll_pitch_yaw([-2.6, 0.0, -1.57])
     c2b = pt.transform_from(camera_rot, [0.05, 0, -0.15])
+    leg_length = 0.8
+    image = None
 
     while True:
         try:
             # wait till we get a nominal step from MPC and a state
             nom_step = interface.traj_queue.get(block = True)
             state = interface.state_queue.get(block = True)
+            body_z = state[2]
             if image is None:
                 image = interface.image_queue.get(block = True)
             elif len(interface.image_queue) > 0:
                 image = interface.image_queue.get()
-            points = processImage(image, K, body_pq, c2b)
+            points = processImage(image, K, state, c2b)
             diffs = np.linalg.norm(points[:,:,0:2] - nom_step[0:2], axis = 2)
             best_uv = numpy.unravel_index(diffs.argmin(), diffs.shape)
-            best_step_loc = findNearestSafeLocation(best_uv, all_feats)
+            best_step_loc = findNearestSafeLocation(best_uv, all_feats, z_bounds = (body_z - leg_length - z_low, body_z - leg_length + z_high), edge_mag)
 
             # build output message
             msg = lcmt_saved_traj() 
