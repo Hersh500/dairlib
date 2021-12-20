@@ -31,7 +31,7 @@ group "1.controllers-and-dispatchers" {
 
 group "2.drake-simulator" {
     cmd "1.simulator-floating" {
-        exec = "bazel-bin/examples/Cassie/multibody_sim --floating_base=true --dt=1e-5 --publish_rate=2000 --init_height=0.82 --target_realtime_rate=.05 --toe_spread=0.02 --penetration_allowance=1e-5";
+        exec = "bazel-bin/examples/Cassie/multibody_sim_w_cam --floating_base=true --dt=1e-5 --publish_rate=2000 --init_height=0.82 --target_realtime_rate=.05 --toe_spread=0.02 --penetration_allowance=1e-5";
         host = "localhost";
     }
 }
