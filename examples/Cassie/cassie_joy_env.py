@@ -85,7 +85,7 @@ class CassieEnv_Joystick(gym.Env):
 
         # com angle, trans. pos, ang vel, trans. vel
         state = np.array(list(msg.position[0:7]) + list(msg.velocity[0:6]))
-        all_states.append(list(msg.position))
+        # all_states.append(list(msg.position))
         self.state_queue.put(state)
 
     # Handles the input image and puts it in queue
@@ -101,9 +101,9 @@ class CassieEnv_Joystick(gym.Env):
             image = Image.frombytes("I;16", (image_msg.width, image_msg.height), image_data)
         image = np.array(image)
         # since the depth image has values that correspond to real quantities, this is not great.
-        all_images.append(image)
-        image = image.astype(np.float32)
-        image = image/2**16
+        # all_images.append(image)
+        image = image.astype(np.float32)/1000
+        # image = image/2**16
         self.image_queue.put(np.expand_dims(image, axis=0))
 
 
@@ -187,6 +187,8 @@ class CassieEnv_Joystick(gym.Env):
         # get the next LCM message in the queue
         dyn_state = self.state_queue.get(block=True)
         image = self.image_queue.get(block=True)
+        all_states.append(dyn_state)
+        all_images.append(image)
 
         base_orientation = R.from_quat(dyn_state[0:4]).as_euler("zyx")[0]
         state_reduced = np.array([dyn_state[self.pos_names.index("base_x")],
@@ -284,7 +286,7 @@ def main():
         s = env.reset()
         i = 0
         while i < 1000: 
-            s, r, d, _ = env.step([-0.2, 0, 0, 0])  # just to see what happens
+            s, r, d, _ = env.step([0.2, 0, 0, 0])  # just to see what happens
             i += 1
             time.sleep(0.05)
 
@@ -296,9 +298,9 @@ def main():
     except KeyboardInterrupt:
         env.kill_procs()
         env.kill_director()
-        # print("saving...")
-        # np.save("ref_images", np.array(all_images))
-        # np.save("ref_states", np.array(all_states))
+        print("saving...")
+        np.save("ref_images_2", np.array(all_images))
+        np.save("ref_states_2", np.array(all_states))
 
 if __name__ == "__main__":
     main()

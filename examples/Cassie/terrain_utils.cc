@@ -121,15 +121,14 @@ namespace dairlib {
 
     }
 
-    void generateRandomSteps(MultibodyPlant<double> *plant,
-                            std::pair<double, double> step_lims) {
+    void generateFixedSteps(MultibodyPlant<double> *plant) {
       if (!plant->geometry_source_is_registered()) {
         return;
       }
       std::random_device generator;
-      std::uniform_real_distribution<double> step_height(step_lims.first, step_lims.second);
+      // std::uniform_real_distribution<double> step_height(step_lims.first, step_lims.second);
       double prev_z = -0.05;
-      double prev_x = 0.0;
+      double prev_x = 1.0;
       RigidTransform<double> pose = RigidTransform<double>(drake::math::RollPitchYaw<double>(0, 0, 0),
                                                            Eigen::Vector3d(0, 0, prev_z));
 
@@ -139,9 +138,8 @@ namespace dairlib {
                                     "box_visual_"+std::to_string(0), drake::geometry::IllustrationProperties());
 
       for (int i = 1; i < 10; i++) {
-        double step = step_height(generator);
         RigidTransform<double> pose = RigidTransform<double>(drake::math::RollPitchYaw<double>(0, 0, 0),
-                                                             Eigen::Vector3d(prev_x + 1, 0, prev_z + step));
+                                                             Eigen::Vector3d(prev_x + 1, 0, prev_z + 0.1));
 
         plant->RegisterCollisionGeometry(plant->world_body(), pose, drake::geometry::Box(1, 2, 0.1),
                                          "box_collision_"+ std::to_string(i), drake::multibody::CoulombFriction(0.8, 0.8));
@@ -149,7 +147,7 @@ namespace dairlib {
         plant->RegisterVisualGeometry(plant->world_body(), pose, drake::geometry::Box(1, 2, 0.1),
                                       "box_visual_"+std::to_string(i), drake::geometry::IllustrationProperties());
         prev_x = prev_x + 1;
-        prev_z = prev_z + step;
+        prev_z = prev_z + 0.1;
       }
 
     }

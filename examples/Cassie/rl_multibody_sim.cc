@@ -124,7 +124,8 @@ int do_main_test(int argc, char* argv[]) {
 //    generateRandomSteps(&plant, step_lims);
   } else {
 //      generateRandomObstacles(&plant, x_lims, y_lims, FLAGS_num_obstacles);
-        generateReferenceTerrain(&plant);
+        // generateReferenceTerrain(&plant);
+        generateFixedSteps(&plant);
   }
 
   std::string urdf;
