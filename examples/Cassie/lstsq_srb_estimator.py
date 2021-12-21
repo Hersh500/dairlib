@@ -7,10 +7,10 @@ class LinearDynamics:
         self.A = A
         self.B = B
         self.b = b
-        
+
     def forward(self, x, u):
         return self.A@x + self.B@u + self.b
-    
+
 """
 Estimates the residual dynamics in a dense way
 - x: array(T, nx_ + 3) the single rigid body state including the stance foot location 
@@ -23,21 +23,21 @@ def dense_residual_estimator(x, u, xdot, stance_modes, dynamics, dt = 1/2000.0):
     x = np.array(x)
     u = np.array(u)
     xdot = np.array(xdot)
-    
+
     assert x.shape[0] == u.shape[0] and x.shape[0] == xdot.shape[0], "data matrices must be same time-length"
 
-    
+
     T = x.shape[0]
     X = np.zeros((T, x.shape[1] + u.shape[1] + 1))
     y = np.zeros((T, xdot.shape[1]))
-    
+
     for t in range(T):
         state = x[t]
         input = u[t]
         deriv_nom = dynamics[stance_modes[t]].forward(state, input)
         X[t] = np.concatenate([state, input, np.ones(1)])
         y[t] = xdot[t] - deriv_nom
-    
+
     X_c = X[:-1,:]
     y_c = y[:-1,:]
     soln = (np.linalg.pinv(X_c.T @ X_c + 0.1 * np.eye(X_c.shape[1])) @ X_c.T @ y_c).T
@@ -64,13 +64,13 @@ def sparse_residual_estimator(x, u, xdot, stance_modes, dynamics, dt = 1/2000.0)
     assert u.shape[1] == 5
     assert xdot.shape[1] == 12
     assert x.shape[0] == u.shape[0] and x.shape[0] == xdot.shape[0]
-    
+
     T = x.shape[0]
     X1 = np.zeros((T, 3))
     X2 = np.zeros((T, 3))
     X3 = np.zeros((T, 4))
     X4 = np.zeros((T, 12))
-    
+
     y1 = np.zeros((T, 3))
     y2 = np.zeros((T, 3))
     y3 = np.zeros((T, 3))
@@ -83,44 +83,44 @@ def sparse_residual_estimator(x, u, xdot, stance_modes, dynamics, dt = 1/2000.0)
         y2[t] = xdot[t][3:6] - deriv_nom[3:6]
         y3[t] = xdot[t][6:9] - deriv_nom[6:9]
         y4[t] = xdot[t][9:12] - deriv_nom[9:12]
-        
+
         X1[t] = state[6:9]
         X2[t] = state[9:12]
         X3[t] = np.concatenate([input[0:3], np.ones(1)])
         X4[t] = np.concatenate([state[0:3], state[12:15], input[0:5], np.ones(1)])
-        
+
     X1_c = X1[:-1,:]
     X2_c = X2[:-1,:]
     X3_c = X3[:-1,:]
     X4_c = X4[:-1,:]
-    
+
     y1_c = y1[:-1,:]
     y2_c = y2[:-1,:]
     y3_c = y3[:-1,:]
     y4_c = y4[:-1,:]
-    
+
     soln1 = (np.linalg.pinv(X1_c.T @ X1_c) @ X1_c.T @ y1_c).T
     soln2 = (np.linalg.pinv(X2_c.T @ X2_c) @ X2_c.T @ y2_c).T
     soln3 = (np.linalg.pinv(X3_c.T @ X3_c) @ X3_c.T @ y3_c).T
     soln4 = (np.linalg.pinv(X4_c.T @ X4_c) @ X4_c.T @ y4_c).T
-    
+
     A = np.zeros((12, 15))
     B = np.zeros((12, 5))
     b = np.zeros(12)
-    
+
     A[0:3,6:9] = soln1
     A[3:6, 9:12] = soln2
     A[9:12, 0:3] = soln4[0:3, 0:3]
     A[9:12, 12:15] = soln4[0:3, 3:6]
-    
+
     B[6:9, 0:3] = soln3[0:3, 0:3]
     B[9:12, 0:3] = soln4[0:3, 6:9]
     B[9:12, 3:4] = soln4[0:3, 9:10]
     B[9:12, 4:5] = soln4[0:3, 10:11]
-    
+
     b[6:9] = soln3[0:3, 3:4].squeeze()
     b[9:12] = soln4[0:3, 11:12].squeeze()
-    
+
     return LinearDynamics(A, B, b)
 
 
@@ -135,7 +135,7 @@ def evaluate_residual_estimator(x, u, xdot, stance_modes, nominal_dynamics, resi
     x = np.array(x)
     u = np.array(u)
     xdot = np.array(xdot)
-    
+
     if x.shape[0] != u.shape[0] or x.shape[0] != xdot.shape[0]:
         print("Error: all data must have the same first dimension")
     T = x.shape[0]

@@ -433,6 +433,7 @@ cc_binary(
         ":simulator_drift",
         "//examples/Cassie/osc",
         "//multibody:utils",
+        "//multibody:view_frame",
         "//multibody/kinematic",
         "//systems:robot_lcm_systems",
         "//systems/controllers:fsm_event_time",
@@ -779,6 +780,12 @@ py_binary(
     deps = [
         "//lcmtypes:lcmtypes_robot_py",
     ],
+)
+
+py_library(
+    name = "lstsq_srb_estimator",
+    srcs = ["lstsq_srb_estimator.py"],
+    deps = [],
 )
 
 load("@drake//tools/skylark:drake_runfiles_binary.bzl", "drake_runfiles_binary")
