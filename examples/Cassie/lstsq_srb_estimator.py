@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 # container class for dynamics
 class LinearDynamics:
@@ -150,3 +151,120 @@ def evaluate_residual_estimator(x, u, xdot, stance_modes, nominal_dynamics, resi
         residual_derivs[t] = residual_deriv
         nominal_derivs[t] = nominal_deriv
     return errors_res, errors_nom, residual_derivs, nominal_derivs
+
+
+class LoggedInfo:
+    def __init__(self, states, foot_locs, inputs, ones, X_s, y_s):
+        self.states = states
+        self.foot_locs = foot_locs
+        self.inputs = inputs
+        self.ones = ones
+        self.X_s = X_s
+        self.y_s = y_s
+        
+# get the A, B, and b matrices
+def get_matrix(lines, cur_pointer):
+    tmp = []
+    while cur_pointer < len(lines) and lines[cur_pointer][0] != "#":
+        tmp.append(lines[cur_pointer])
+        cur_pointer += 1
+    
+    matrix = []
+    for line in tmp:
+        l_split = line.strip("\n").split(" ")
+        matrix.append([float(s) for s in l_split if s != ""])
+    return matrix, cur_pointer+1
+
+## Assumes that you start from the first line of 
+def get_logged_states_and_matrices(lines, cur_pointer):
+    p = cur_pointer
+    states = []
+    foot_locs = []
+    inputs = []
+    ones = []  # this is just for convenience
+    X_s = []
+    y_s = []
+    while p < len(lines):
+        # get state shit
+        vec_row, p = get_matrix(lines, p)
+        vec_row = (np.array(vec_row).T)[0]
+        states.append(vec_row[0:12])
+        foot_locs.append(vec_row[12:15])
+        # change to 20 for pitch torque
+        inputs.append(vec_row[15:20])
+        ones.append(vec_row[20:])
+        
+        # get X_
+        X_, p = get_matrix(lines, p)
+        X_s.append(np.array(X_))
+
+        # get y_
+        y_, p = get_matrix(lines, p)
+        y_s.append(np.array(y_))
+
+        if p + 100 + 100 + 31 >= len(lines):
+            break
+    return LoggedInfo(states, foot_locs, inputs, ones, X_s, y_s)
+
+
+def main():
+    ## assuming that this part will be replaced with your logging infra
+    fname = "log3_continuous.txt"
+    f = open(fname)
+    lines = f.readlines()
+    f.close()
+
+    A, cp = get_matrix(lines, 1)
+    B, cp = get_matrix(lines, cp)
+    b, cp = get_matrix(lines, cp)
+    logged_stuff = get_logged_states_and_matrices(lines, cp)
+
+    states = logged_stuff.states
+    inputs = logged_stuff.inputs
+    foot_locs = logged_stuff.foot_locs
+    ones = logged_stuff.ones
+    X_s = logged_stuff.X_s
+    y_s = logged_stuff.y_s
+    A = np.array(A)
+    B = np.array(B)
+    b = np.array(b).squeeze()
+
+
+    ## Calling the estimator
+    T = 50
+    dynamics = [LinearDynamics(A, B, b)] # TODO: add the other stance mode to this 
+    modes = [0 for i in range(T)]
+
+    derivs = [(states[t+1] - states[t]) * 2000 for t in range(len(states))]
+    states_and_steps = np.hstack([states, foot_locs])
+    # replace this with sparse if you want sparse
+    residual_dynamics = dense_residual_estimator(states_and_steps[:T], inputs[:T], derivs[:T], modes, dynamics)
+
+    ## Evaluate the residuals on some test set
+    T = 100
+    modes = [0 for i in range(T)]
+    derivs = [(states[t+1] - states[t]) * 2000 for t in range(T)]
+    states_and_steps = np.hstack([states, foot_locs])
+
+    errors_res, errors_nom, ress, noms = evaluate_residual_estimator(states_and_steps[:T], inputs[:T], 
+                                                     derivs, modes, dynamics, residual_dynamics)
+    
+    ## Plot norms of residual matrices over time
+    T = 50
+    dynamics = [LinearDynamics(A, B, b)] # TODO: add the other stance mode to this 
+    modes = [0 for i in range(T)]
+    derivs = [(states[t+1] - states[t]) * 2000 for t in range(len(states)-1)]
+    states_and_steps = np.hstack([states, foot_locs])
+    norms = []
+    for i in range(0, 600 - T):
+        residual_dynamics = dense_residual_estimator(states_and_steps[i:i+T], 
+                                                     inputs[i:i+T], 
+                                                     derivs[i:i+T], 
+                                                     modes, dynamics)
+        norms.append(np.linalg.norm(residual_dynamics.A, ord = "fro"))
+
+    plt.plot(norms)
+
+
+if __name__ == "__main__":
+    main()
