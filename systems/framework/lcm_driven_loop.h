@@ -149,16 +149,19 @@ class LcmDrivenLoop {
   }
 
   // Used to make rl_multibody_sim work
+  // Main difference is that this initializes the simulator.
   LcmDrivenLoop(drake::lcm::DrakeLcm* drake_lcm,
                 std::unique_ptr<drake::systems::Diagram<double>> diagram,
                 std::unique_ptr<drake::systems::Context<double>> context,
                 const drake::systems::LeafSystem<double>* lcm_parser,
                 std::vector<std::string> input_channels,
                 const std::string& active_channel,
-                const std::string& switch_channel, bool is_forced_publish)
+                const std::string& switch_channel, bool is_forced_publish,
+                const drake::systems::LeafSystem<double>* pub_system)
       : drake_lcm_(drake_lcm),
         lcm_parser_(lcm_parser),
-        is_forced_publish_(is_forced_publish) {
+        is_forced_publish_(is_forced_publish),
+        pub_system_(pub_system) {
 
     // Move simulator
     if (!diagram->get_name().empty()) {
@@ -196,6 +199,7 @@ class LcmDrivenLoop {
     DRAKE_DEMAND(is_name_match);
 
     active_channel_ = active_channel;
+    use_pub_system_ = true;
   }
 
     // Start simulating the diagram
@@ -286,7 +290,12 @@ class LcmDrivenLoop {
         simulator_->AdvanceTo(time);
         if (is_forced_publish_) {
           // Force-publish via the diagram
-          diagram_ptr_->Publish(diagram_context);
+          if (use_pub_system_) {
+            pub_system_->Publish(pub_system_->GetMyContextFromRoot(diagram_context));
+          }
+          else {
+            diagram_ptr_->Publish(diagram_context);
+          }
         }
 
         // Clear messages in the current input channel
@@ -346,6 +355,8 @@ class LcmDrivenLoop {
       name_to_input_sub_map_;
 
   bool is_forced_publish_;
+  bool use_pub_system_ = false;
+  const drake::systems::LeafSystem<double>* pub_system_;
 };
 
 }  // namespace systems

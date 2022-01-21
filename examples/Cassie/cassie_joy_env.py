@@ -13,17 +13,20 @@ from scipy.spatial.transform import Rotation as R
 import threading
 import argparse
 
-# temporary
-all_images = []    
-all_states = []
 
-# TODO(hersh): make a more flexible environment so it's easier to slot in other
-# low level controllers and tasks (like footstep placement)
-# requires: defining your own action -> message, message -> state, state -> reward,
-# lcm message types, termination conditions... seems to be pretty annoying anyways.
-# maybe it's just a more structured way to go about things?
 class CassieEnv_Joystick(gym.Env):
-    def __init__(self, action_channel, state_channel, rate, workspace, visualize):
+    def __init__(self,
+                action_channel,
+                state_channel,
+                rate,
+                workspace,
+                goal_state,
+                visualize,
+                terrain_class,
+                num_features,
+                reward_fn_type,
+                acc_penalty):
+
         super(CassieEnv_Joystick, self).__init__()
 
         ### DRAKE SIMULATION STUFF ###
@@ -35,6 +38,8 @@ class CassieEnv_Joystick(gym.Env):
         self.controller_p = "run_osc_walking_controller"
         self.simulation_p = "rl_multibody_sim"
         self.viz = visualize
+        self.num_features = num_features
+        self.terrain_class = terrain_class
 
         ### Communication Stuff ###
         self.lc = lcm.LCM()
@@ -51,17 +56,19 @@ class CassieEnv_Joystick(gym.Env):
 
         ### Setting RL variables ###
         self.workspace = workspace
-        self.goal_state = [5, 5]
+        self.goal_state = goal_state
         self.done = False
         self.rate = rate
         self.image_dim = (1, 128, 128)
         self.action_space = spaces.Box(low = np.array([-1, -1, -1, -1]), high = np.array([1, 1, 1, 1]))
         # TODO(hersh): this breaks the current td3 code.
-        self.observation_space = spaces.Dict({"position": spaces.Box(low = np.array([-5, -5, -5, -5, -np.pi]), high = np.array([5, 5, 5, 5, np.pi])),
+        self.observation_space = spaces.Dict({"position": spaces.Box(low = np.array([0, 0, 0, 0, 0]), high = np.array([1, 1, 1, 1, 1])),
                                               "image": spaces.Box(low = -1, high = 1, shape = self.image_dim)})
         self.state_dim = 5
         self._max_episode_steps = 30 * self.rate 
         self.prev_dyn_state = None
+        self.reward_fn_type = reward_fn_type
+        self.use_acc_penalty = acc_penalty
         
         ### Loading up Cached Initial Conditions ###
         self.all_ics = []
@@ -75,7 +82,9 @@ class CassieEnv_Joystick(gym.Env):
         if self.viz:
             self.drake_director = sp.Popen(["bazel-bin/director/drake-director", "--use_builtin_scripts=frame,image", "--script", "examples/Cassie/director_scripts/show_time.py"])
             time.sleep(5)  # have to sleep here otherwise visualization throws an error since director has nontrivial startup time 
-
+        else:
+            self.drake_director = None
+            time.sleep(1)
 
 
     # receives and handles the robot state
@@ -132,7 +141,11 @@ class CassieEnv_Joystick(gym.Env):
         x_loc = cur_state[self.pos_names.index("base_x")]
         y_loc = cur_state[self.pos_names.index("base_y")]
         d2goal_cur = np.sqrt((x_loc - self.goal_state[0])**2 + (y_loc - self.goal_state[1])**2)
-        return d2goal_prev - d2goal_cur
+        acc_penalty = 0.2 * (np.linalg.norm(cur_state[7:] - prev_state[7:]))
+        if self.use_acc_penalty:
+            return d2goal_prev - d2goal_cur - acc_penalty
+        else:
+            return d2goal_prev - d2goal_cur
 
 
     # failure if we exit the workspace or success if we hit the goal
@@ -152,6 +165,7 @@ class CassieEnv_Joystick(gym.Env):
             return True
         dist_to_goal = np.sqrt((x_loc - self.goal_state[0])**2 + (y_loc - self.goal_state[1])**2)
         if dist_to_goal < 3e-1:
+            print("Hit goal!")
             return True
         if self.ep_timesteps > self._max_episode_steps:
             print("max episode timesteps exceeded!")
@@ -159,6 +173,11 @@ class CassieEnv_Joystick(gym.Env):
             return True
         return False
 
+    def normalize_x(self, var):
+        return (var - self.workspace[0][0])/(self.workspace[0][0] - self.workspace[0][1])
+
+    def normalize_y(self, var):
+        return (var - self.workspace[1][0])/(self.workspace[1][0] - self.workspace[1][1])
 
     def step(self, action):
         # see examples/director_scripts/pd_panel.py
@@ -168,41 +187,42 @@ class CassieEnv_Joystick(gym.Env):
         # send LCM message with the desired action
         self.lc.publish(self.action_channel, action_msg.encode())
         # print("published action", action)
+        # the "step" message will step the simulator until the desired simulator time.
         step_msg = lcmt_rl_step()
         step_msg.utime = int(self.sim_ticks + 1/self.rate * 1e6)
         self.lc.publish("LEARNER_STEP_SIM", step_msg.encode())
 
         # wait and get the last LCM message with the desired robot state
         # have to do this because the sim is running in real time
-        # TODO: can this run faster than real time to get more training in?
-        time.sleep(1/self.rate)
+        # I need a way of only sending an lcm message when the sim is done stepping!
+        # time.sleep(1/self.rate)
 
-        '''
-        while self.state_queue.qsize() < 1:
-            self.lc.handle()
-        while self.image_queue.qsize() < 1:
-            self.lc.handle()
-        '''
 
         # get the next LCM message in the queue
+        start = time.time()
         dyn_state = self.state_queue.get(block=True)
+        end = time.time()
+        print(f"time to get state = {end - start}")
         image = self.image_queue.get(block=True)
-        all_states.append(dyn_state)
-        all_images.append(image)
 
         base_orientation = R.from_quat(dyn_state[0:4]).as_euler("zyx")[0]
-        state_reduced = np.array([dyn_state[self.pos_names.index("base_x")],
-                                  dyn_state[self.pos_names.index("base_y")],
-                                  self.goal_state[0],
-                                  self.goal_state[1],
+        base_orientation /= 2 * np.pi
+        state_reduced = np.array([self.normalize_x(dyn_state[self.pos_names.index("base_x")]),
+                                  self.normalize_y(dyn_state[self.pos_names.index("base_y")]),
+                                  self.normalize_x(self.goal_state[0]),
+                                  self.normalize_y(self.goal_state[1]),
                                   base_orientation])
-        reward = self.reward_fn_firstorder(dyn_state, self.prev_dyn_state)
+        print(state_reduced)
+        if self.reward_fn_type == 1:
+            reward = self.reward_fn_firstorder(dyn_state, self.prev_dyn_state)
+        elif self.reward_fn_type == 0:
+            reward = self.reward_fn(dyn_state)
+
         self.state = {"position":state_reduced, "image":image}
         self.done = self.done_fn(dyn_state)
         self.ep_timesteps += 1
         if self.done:
             self.kill_procs()
-        # print("got reward", reward)
         self.prev_dyn_state = dyn_state
         return self.state, reward, self.done, {}
 
@@ -217,16 +237,19 @@ class CassieEnv_Joystick(gym.Env):
 
         # self.set_goal(np.random.uniform(self.workspace[0][0], self.workspace[0][1]),
         #              np.random.uniform(self.workspace[1][0], self.workspace[1][1]))
-        self.set_goal(3, 3)
+        self.set_goal(self.goal_state[0], self.goal_state[1])
 
         # pick a new initial condition, set that as our state
-#        ic_idx = np.random.randint(0, self.all_ics.shape[1])
-        ic_idx = 200
+        ic_idx = np.random.randint(0, self.all_ics.shape[1])
         print("using ic", ic_idx)
         ic = self.all_ics[:,ic_idx]
         
         self.ctrlr = sp.Popen([self.bin_dir + self.controller_p] + self.ctrlr_options)
-        self.sim = sp.Popen([self.bin_dir + self.simulation_p, "--ic_idx=" + str(ic_idx), "--num_obstacles="+str(6), "--viz="+str(int(self.viz)), "--gaps=0"])
+        t_string = "--terrain_type=" + str(self.terrain_class)
+        self.sim = sp.Popen([self.bin_dir + self.simulation_p,
+                            "--ic_idx=" + str(ic_idx),
+                            "--num_obstacles="+str(self.num_features),
+                            "--viz="+str(int(self.viz)), t_string])
         time.sleep(1)
 
 
@@ -282,25 +305,20 @@ class CassieEnv_Joystick(gym.Env):
 def main():
     try: 
         workspace = [[-1, 5], [-3, 3], [0.5, 1.3]]
-        env = CassieEnv_Joystick("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_SIMULATION", 10, workspace, True)
+        env = CassieEnv_Joystick("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_RL", 2, workspace, [1, 1], True, 0, 1, 1, False)
         s = env.reset()
         i = 0
-        while i < 1000: 
+        while i < 100: 
             s, r, d, _ = env.step([0.2, 0, 0, 0])  # just to see what happens
+            if d:
+                break
             i += 1
-            time.sleep(0.05)
 
-        # print('exited step')
-        time.sleep(90)
-        # TODO: figure out how to detect when the controller terminates
         env.kill_procs()
         env.kill_director()
     except KeyboardInterrupt:
         env.kill_procs()
         env.kill_director()
-        print("saving...")
-        np.save("ref_images_2", np.array(all_images))
-        np.save("ref_states_2", np.array(all_states))
 
 if __name__ == "__main__":
     main()

@@ -73,6 +73,7 @@ DEFINE_double(penetration_allowance, 1e-5,
 DEFINE_double(end_time, std::numeric_limits<double>::infinity(),
               "End time for simulator");
 DEFINE_double(publish_rate, 2000, "Publish rate for simulator");
+
 DEFINE_double(init_height, .7,
               "Initial starting height of the pelvis above "
               "ground");
@@ -88,7 +89,7 @@ DEFINE_bool(make_srbd_approx, false, "modify plant to closer approximate single 
 
 DEFINE_uint32(ic_idx, 0, "index of initial condition in csv file");
 DEFINE_string(ic_fname, "examples/Cassie/cassie_initial_conditions.csv", "csv file where precomputed initial conditions are stored.");
-DEFINE_bool(gaps, false, "Whether or not to use gap terrains");
+DEFINE_uint32(terrain_type, 0, "Which type of terrain to use. 0=flat, 1 = gaps, 2 = large obstacles, 3 = stairs");
 DEFINE_uint32(num_obstacles, 3, "Number of large obstacles to generate");
 DEFINE_bool(viz, true, "Whether or not to visualize");
 
@@ -109,24 +110,33 @@ int do_main_test(int argc, char* argv[]) {
   const double time_step = FLAGS_time_stepping ? FLAGS_dt : 0.0;
   MultibodyPlant<double>& plant = *builder.AddSystem<MultibodyPlant>(time_step);
 
-  if (FLAGS_floating_base && !FLAGS_gaps) {
-    multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
-  }
 
+  // TODO(hersh500): parameterize these as well
   std::pair<double, double> x_lims(0.5, 4);
   std::pair<double, double> y_lims(-3, 3);
   std::pair<double, double> gap_lims(0.1, 0.3);
   std::pair<double, double> step_lims(0.05, 0.1);
 
-      if (FLAGS_gaps) {
+  switch (FLAGS_terrain_type) {
+    case 0:
+      multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
+      break;
+    case 1:
       plant.RegisterAsSourceForSceneGraph(&scene_graph);
-//      generateRandomGaps(&plant, gap_lims);
-//    generateRandomSteps(&plant, step_lims);
-  } else {
-//      generateRandomObstacles(&plant, x_lims, y_lims, FLAGS_num_obstacles);
-        // generateReferenceTerrain(&plant);
-        generateFixedSteps(&plant);
-  }
+      generateRandomGaps(&plant, gap_lims);
+      break;
+    case 2:
+      multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
+      generateRandomObstacles(&plant, x_lims, y_lims, FLAGS_num_obstacles);
+      break;
+    case 3:
+      plant.RegisterAsSourceForSceneGraph(&scene_graph);
+      generateFixedSteps(&plant);
+      break;
+    default:
+      multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
+      break;
+  };
 
   std::string urdf;
   if (FLAGS_spring_model) {
@@ -161,6 +171,10 @@ int do_main_test(int argc, char* argv[]) {
   auto state_pub =
       builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_robot_output>(
           "CASSIE_STATE_SIMULATION", lcm, 1.0 / FLAGS_publish_rate));
+  auto state_pub_rl =
+          builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_robot_output>(
+                  "CASSIE_STATE_RL", lcm, {drake::systems::TriggerType::kForced}));
+
   auto state_sender = builder.AddSystem<systems::RobotOutputSender>(
       plant, FLAGS_publish_efforts);
 
@@ -183,7 +197,6 @@ int do_main_test(int argc, char* argv[]) {
       builder.AddSystem(LcmPublisherSystem::Make<dairlib::lcmt_cassie_out>(
           "CASSIE_OUTPUT", lcm, 1.0 / FLAGS_publish_rate));
 
-
   // connect leaf systems
   builder.Connect(*input_sub, *input_receiver);
   builder.Connect(*input_receiver, *passthrough);
@@ -196,6 +209,7 @@ int do_main_test(int argc, char* argv[]) {
   builder.Connect(discrete_time_delay->get_output_port(),
                   state_sender->get_input_port_effort());
   builder.Connect(*state_sender, *state_pub);
+  builder.Connect(*state_sender, *state_pub_rl);
   builder.Connect(
       plant.get_geometry_poses_output_port(),
       scene_graph.get_source_pose_port(plant.get_source_id().value()));
@@ -237,7 +251,7 @@ int do_main_test(int argc, char* argv[]) {
 
     auto image_array_lcm_publisher = builder.AddSystem(LcmPublisherSystem::Make<drake::lcmt_image_array>(
                     "DRAKE_RGBD_CAMERA_IMAGES", lcm,
-                    1.0 / 10));
+                    1.0/10));
     image_array_lcm_publisher->set_name("rgbd_publisher");
     builder.Connect(image_to_lcm_image_array->image_array_t_msg_output_port(),
                     image_array_lcm_publisher->get_input_port());
@@ -247,7 +261,6 @@ int do_main_test(int argc, char* argv[]) {
     DrakeVisualizer<double>::AddToBuilder(&builder, scene_graph);
   }
   auto diagram = builder.Build();
-
   // Create a context for this system:
   std::unique_ptr<Context<double>> diagram_context =
       diagram->CreateDefaultContext();
@@ -279,12 +292,16 @@ int do_main_test(int argc, char* argv[]) {
 
   plant.SetPositions(&plant_context, q_init);
   plant.SetVelocities(&plant_context, v_init);
-  // Doesn't initialize the simulator for some reason...
+
+  // std::unique_ptr<Context<double>> state_pub_rl_context_ptr = state_pub_rl->CreateDefaultContext();
+  // state_pub_rl->SetDefaultContext(state_pub_rl_context_ptr.get());
+  // const Context<double> &state_pub_rl_context = state_pub_rl->GetMyContextFromRoot(diagram_context2);
+
   systems::LcmDrivenLoop<dairlib::lcmt_rl_step> loop(
       &drake_lcm, std::move(diagram),
       std::move(diagram_context), nullptr,
       std::vector<std::string>(1, "LEARNER_STEP_SIM"),
-      "LEARNER_STEP_SIM", "", true);
+      "LEARNER_STEP_SIM", "", true, state_pub_rl);
 
   loop.Simulate();
 
