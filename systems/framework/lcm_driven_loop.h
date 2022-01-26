@@ -291,6 +291,7 @@ class LcmDrivenLoop {
         if (is_forced_publish_) {
           // Force-publish via the diagram
           if (use_pub_system_) {
+            // std::cout  << "publishing pub system\n";
             pub_system_->Publish(pub_system_->GetMyContextFromRoot(diagram_context));
           }
           else {
