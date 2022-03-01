@@ -14,6 +14,7 @@
 #include "systems/robot_lcm_systems.h"
 #include "examples/Cassie/camera_utils.h"
 #include "examples/Cassie/terrain_utils.h"
+#include "examples/Cassie/cassie_fixed_point_solver.h"
 
 #include "drake/geometry/render/render_engine_vtk_factory.h"
 #include "drake/geometry/drake_visualizer.h"
@@ -112,8 +113,12 @@ int do_main_test(int argc, char* argv[]) {
 
 
   // TODO(hersh500): parameterize these as well
-  std::pair<double, double> x_lims(0.5, 4);
-  std::pair<double, double> y_lims(-3, 3);
+  // for now, hardcoding a change in :(
+//  std::pair<double, double> x_lims(0.5, 4);
+//  std::pair<double, double> y_lims(-3, 3);
+  std::pair<double, double> x_lims(1, 4);
+  std::pair<double, double> y_lims(-0.1, 0.1);
+
   std::pair<double, double> gap_lims(0.1, 0.3);
   std::pair<double, double> step_lims(0.05, 0.1);
 
@@ -132,6 +137,10 @@ int do_main_test(int argc, char* argv[]) {
     case 3:
       plant.RegisterAsSourceForSceneGraph(&scene_graph);
       generateFixedSteps(&plant);
+      break;
+    case 4:
+      multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
+      generateFixedObstacleCourse(&plant);
       break;
     default:
       multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
@@ -226,15 +235,22 @@ int do_main_test(int argc, char* argv[]) {
 
   // Add camera to the simulation (TODO(hersh500): fix tabs)
     const auto& [color_camera, depth_camera] =
-    camera::MakeGenericCameraModel(renderer_name);
+    camera::MakeGenericCameraModel(renderer_name, 64, 64);
     const std::optional<drake::geometry::FrameId> parent_body_id =
             plant.GetBodyFrameIdIfExists(plant.GetFrameByName("pelvis").body().index());
-    // Camera transformation used for navigation RL stuff (TODO: somehow get this in a config file)
-    // drake::math::RigidTransform<double> cam_transform = drake::math::RigidTransform<double>(drake::math::RollPitchYaw<double>(-2.4, 0.0, -1.57),
-//            Eigen::Vector3d(0.15, 0, 0.2));
-
-    drake::math::RigidTransform<double> cam_transform = drake::math::RigidTransform<double>(drake::math::RollPitchYaw<double>(-2.6, 0.0, -1.57),
+    bool lookahead = true;
+    drake::math::RigidTransform<double> cam_transform;
+    if (lookahead) {
+      cam_transform =
+          drake::math::RigidTransform<double>(
+              drake::math::RollPitchYaw<double>(-2.3, 0.0, -1.57),
             Eigen::Vector3d(0.05, 0, -0.15));
+    } else {
+       cam_transform =
+          drake::math::RigidTransform<double>(
+              drake::math::RollPitchYaw<double>(-2.6, 0.0, -1.57),
+              Eigen::Vector3d(0.05, 0, -0.15));
+    }
 
     auto camera = builder.AddSystem<drake::systems::sensors::RgbdSensor>(
             parent_body_id.value(), cam_transform, color_camera, depth_camera);
@@ -270,12 +286,34 @@ int do_main_test(int argc, char* argv[]) {
       diagram->GetMutableSubsystemContext(plant, diagram_context.get());
 
   // Set initial conditions of the simulation
-  VectorXd q_init, u_init, lambda_init, v_init;
+//  VectorXd q_init, u_init, lambda_init, v_init;
 
   // read the matrix and get the initial conditions
-  MatrixXd initial_conds = readCSV(FLAGS_ic_fname);
-  q_init = initial_conds.block(0, FLAGS_ic_idx, 23,1);
-  v_init = initial_conds.block(23, FLAGS_ic_idx, 22, 1);
+//  MatrixXd initial_conds = readCSV(FLAGS_ic_fname);
+//  q_init = initial_conds.block(0, FLAGS_ic_idx, 23,1);
+//  v_init = initial_conds.block(23, FLAGS_ic_idx, 22, 1);
+  // TEMP: does not having the fixed initial conditions enable me to change the sim params?
+  VectorXd q_init, u_init, lambda_init;
+  double mu_fp = 0;
+  double min_normal_fp = 70;
+
+  // Create a plant for CassieFixedPointSolver.
+  // Note that we cannot use the plant from the above diagram, because after the
+  // diagram is built, plant.get_actuation_input_port().HasValue(*context)
+  // throws a segfault error
+  drake::multibody::MultibodyPlant<double> plant_for_solver(0.0);
+  addCassieMultibody(&plant_for_solver, nullptr,
+                     FLAGS_floating_base /*floating base*/, urdf,
+                     FLAGS_spring_model, true);
+  plant_for_solver.Finalize();
+  if (FLAGS_floating_base) {
+    CassieFixedPointSolver(plant_for_solver, FLAGS_init_height, mu_fp,
+                           min_normal_fp, true, FLAGS_toe_spread, &q_init, &u_init,
+                           &lambda_init);
+  } else {
+    CassieFixedBaseFixedPointSolver(plant_for_solver, &q_init, &u_init,
+                                    &lambda_init);
+  }
 
   if (FLAGS_make_srbd_approx) {
     std::vector<std::string> links = {"yaw_left", "yaw_right", "hip_left", "hip_right",
@@ -289,13 +327,11 @@ int do_main_test(int argc, char* argv[]) {
     multibody::MakePlantApproximateRigidBody(&plant_context, plant,
                                              "pelvis", links, com_offset, I_rot, mass, 0.02);
   }
-
   plant.SetPositions(&plant_context, q_init);
-  plant.SetVelocities(&plant_context, v_init);
+  plant.SetVelocities(&plant_context, VectorXd::Zero(plant.num_velocities()));
 
-  // std::unique_ptr<Context<double>> state_pub_rl_context_ptr = state_pub_rl->CreateDefaultContext();
-  // state_pub_rl->SetDefaultContext(state_pub_rl_context_ptr.get());
-  // const Context<double> &state_pub_rl_context = state_pub_rl->GetMyContextFromRoot(diagram_context2);
+//  plant.SetPositions(&plant_context, q_init);
+//  plant.SetVelocities(&plant_context, v_init);
 
   systems::LcmDrivenLoop<dairlib::lcmt_rl_step> loop(
       &drake_lcm, std::move(diagram),

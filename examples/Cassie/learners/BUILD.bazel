@@ -1,0 +1,89 @@
+load("@drake//tools/lint:lint.bzl", "add_lint_tests")
+
+package(default_visibility = ["//visibility:public"])
+
+load(
+    "@drake//tools/skylark:drake_lcm.bzl",
+    "drake_lcm_cc_library",
+    "drake_lcm_java_library",
+    "drake_lcm_py_library",
+)
+load(
+    "@drake//tools/skylark:drake_py.bzl",
+    "drake_py_binary",
+    "drake_py_library",
+    "drake_py_unittest",
+)
+load(
+    "@drake//tools/skylark:pybind.bzl",
+    "drake_pybind_library",
+    "get_drake_py_installs",
+    "get_pybind_package_info",
+    "pybind_py_library",
+)
+
+py_binary(
+    name = "cassie_learner",
+    srcs = ["cassie_learner.py"],
+    main = "cassie_learner.py",
+    deps = [
+        "//examples/Cassie/learners:cassie_joy_env",
+    ],
+)
+
+py_binary(
+    name = "sac",
+    srcs = ["sac.py"],
+    main = "sac.py",
+    deps = [
+        "//examples/Cassie/learners:cassie_joy_env",
+    ],
+)
+
+py_binary(
+    name = "ppo",
+    srcs = ["ppo.py"],
+    main = "ppo.py",
+    deps = [
+        "//examples/Cassie/learners:cassie_joy_env",
+    ],
+)
+
+py_library(
+    name = "policies",
+    srcs = ["policies.py"],
+)
+
+py_binary(
+    name = "td3",
+    srcs = ["td3.py"],
+    main = "td3.py",
+    deps = [
+        "//examples/Cassie/learners:cassie_joy_env",
+        "//examples/Cassie/learners:policies",
+    ],
+)
+
+py_binary(
+    name = "cassie_joy_env",
+    srcs = ["cassie_joy_env.py"],
+    data = [
+        "@lcm//:lcm-python",
+    ],
+    main = "cassie_joy_env.py",
+    deps = [
+        "//lcmtypes:lcmtypes_robot_py",
+    ],
+)
+
+py_binary(
+    name = "cassie_pd_env",
+    srcs = ["cassie_pd_env.py"],
+    data = [
+        "@lcm//:lcm-python",
+    ],
+    main = "cassie_pd_env.py",
+    deps = [
+        "//lcmtypes:lcmtypes_robot_py",
+    ],
+)

@@ -47,34 +47,6 @@ namespace dairlib {
         }
     }
 
-    // TODO(hersh500): This doesn't work for collisions (results in an error when the collision happens)
-    void generateRandomObstacles(SceneGraph<double>& graph,
-                                      std::pair<double, double> x_lims,
-                                      std::pair<double, double> y_lims) {
-        drake::geometry::SourceId terrain_geom_id = graph.RegisterSource("terrain_adder");
-        drake::RandomGenerator random_gen = drake::RandomGenerator();
-        auto x_dist = drake::schema::Uniform(x_lims.first, x_lims.second);
-        auto y_dist = drake::schema::Uniform(y_lims.first, y_lims.second);
-        for (int i = 0; i < 10; i++) {
-            double x = x_dist.Sample(&random_gen);
-            double y = y_dist.Sample(&random_gen);
-            // Generate a random pose for this object; maybe based on some stochastic process?
-            RigidTransform<double> pose = RigidTransform<double>(drake::math::RollPitchYaw<double>(0, 0, 0),
-                                                                 Eigen::Vector3d(x, y, 0));
-
-            drake::geometry::GeometryId box_id = graph.RegisterAnchoredGeometry(terrain_geom_id, make_unique<drake::geometry::GeometryInstance>(
-                    pose,make_unique<drake::geometry::Box>(0.5, 0.5, 2), "box_" + std::to_string(i)));
-            drake::geometry::PerceptionProperties properties = drake::geometry::PerceptionProperties();
-            properties.AddProperty("label", "id", drake::geometry::render::RenderLabel(box_id.get_value()));
-            graph.AssignRole(terrain_geom_id, box_id, properties);
-            graph.AssignRole(terrain_geom_id, box_id, drake::geometry::IllustrationProperties());
-            drake::geometry::ProximityProperties prox_props = drake::geometry::ProximityProperties();
-            prox_props.AddProperty(drake::geometry::internal::kMaterialGroup,
-                                   drake::geometry::internal::kFriction, drake::multibody::CoulombFriction(.8, .8));
-            graph.AssignRole(terrain_geom_id, box_id, prox_props);
-        }
-    }
-
     // For now, assume that the gaps go down to infinity. Eventually, maybe want to structure this like a pallet test.
     void generateRandomGaps(MultibodyPlant<double> *plant,
                             std::pair<double, double> gap_lims) {
@@ -194,7 +166,38 @@ namespace dairlib {
 
       plant->RegisterVisualGeometry(plant->world_body(), pose, drake::geometry::Box(0.05, 0.05, 0.5),
                                     "box_visual_" + std::to_string(4), drake::geometry::IllustrationProperties());
+    }
 
+    void generateFixedObstacleCourse(MultibodyPlant<double> *plant) {
+      if (!plant->geometry_source_is_registered()) {
+        return;
+      }
 
+      Eigen::MatrixXd locs(8,2);
+      locs << 1.5, 1.5,
+          1.5, -1.5,
+          -1.5, 1.5,
+          -1.5, -1.5,
+          2.5, 0,
+          0, 2.5,
+          -2.5, 0,
+          0, -2.5;
+
+      double width = 0.5;
+      double height = 1;
+      for (int i = 0; i < locs.rows(); i++) {
+        double x = locs(i, 0);
+        double y = locs(i, 1);
+
+        // Generate a random pose for this object; maybe based on some stochastic process?
+        RigidTransform<double> pose = RigidTransform<double>(drake::math::RollPitchYaw<double>(0, 0, 0),
+                                                             Eigen::Vector3d(x, y, height/2));
+
+        plant->RegisterCollisionGeometry(plant->world_body(), pose, drake::geometry::Box(width, width, height),
+                                         "box_collision_"+ std::to_string(i), drake::multibody::CoulombFriction(0.8, 0.8));
+
+        plant->RegisterVisualGeometry(plant->world_body(), pose, drake::geometry::Box(width, width, height),
+                                      "box_visual_"+std::to_string(i), drake::geometry::IllustrationProperties());
+      }
     }
 }

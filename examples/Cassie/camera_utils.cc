@@ -53,9 +53,9 @@ MakeD415CameraModel(const std::string &renderer_name) {
 
 std::pair <drake::geometry::render::ColorRenderCamera,
         drake::geometry::render::DepthRenderCamera>
-MakeGenericCameraModel(const std::string &renderer_name) {
-    const int kHeight = 128;
-    const int kWidth = 128;
+MakeGenericCameraModel(const std::string &renderer_name, int kHeight, int kWidth) {
+    // const int kHeight = 128;
+    // const int kWidth = 128;
 
     // To pose the two sensors relative to the camera body, we'll assume X_BC = I,
     // and select a representative value for X_CD drawn from calibration to define

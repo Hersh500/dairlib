@@ -14,7 +14,7 @@ std::pair<drake::geometry::render::ColorRenderCamera,
         drake::geometry::render::DepthRenderCamera> MakeD415CameraModel(const std::string &renderer_name);
 
 std::pair<drake::geometry::render::ColorRenderCamera,
-        drake::geometry::render::DepthRenderCamera> MakeGenericCameraModel(const std::string &renderer_name);
+        drake::geometry::render::DepthRenderCamera> MakeGenericCameraModel(const std::string &renderer_name, const int kHeight, const int kWidth);
 }
 }
 #endif //DAIRLIB_CAMERA_UTILS_H

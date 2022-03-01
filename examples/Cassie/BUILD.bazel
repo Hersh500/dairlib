@@ -699,41 +699,6 @@ cc_library(
     ],
 )
 
-py_library(
-    name = "policies",
-    srcs = ["policies.py"],
-)
-
-py_binary(
-    name = "td3",
-    srcs = ["td3.py"],
-    main = "td3.py",
-    deps = [
-        "//examples/Cassie:cassie_joy_env",
-        "//examples/Cassie:policies",
-    ],
-)
-
-py_binary(
-    name = "ppo",
-    srcs = ["ppo.py"],
-    main = "ppo.py",
-    deps = [
-        "//examples/Cassie:cassie_joy_env",
-    ],
-)
-
-py_binary(
-    name = "state_receiver",
-    srcs = ["state_receiver.py"],
-    data = [
-        "@lcm//:lcm-python",
-    ],
-    main = "state_receiver.py",
-    deps = [
-        "//lcmtypes:lcmtypes_robot_py",
-    ],
-)
 
 py_binary(
     name = "footstep_planner",
@@ -747,29 +712,7 @@ py_binary(
     ],
 )
 
-py_binary(
-    name = "cassie_joy_env",
-    srcs = ["cassie_joy_env.py"],
-    data = [
-        "@lcm//:lcm-python",
-    ],
-    main = "cassie_joy_env.py",
-    deps = [
-        "//lcmtypes:lcmtypes_robot_py",
-    ],
-)
 
-py_binary(
-    name = "cassie_pd_env",
-    srcs = ["cassie_pd_env.py"],
-    data = [
-        "@lcm//:lcm-python",
-    ],
-    main = "cassie_pd_env.py",
-    deps = [
-        "//lcmtypes:lcmtypes_robot_py",
-    ],
-)
 
 py_binary(
     name = "cassie_virtual_remote_py",

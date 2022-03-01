@@ -30,6 +30,8 @@ namespace dairlib {
 
     void generateReferenceTerrain(MultibodyPlant<double> *plant);
 
+    void generateFixedObstacleCourse(MultibodyPlant<double> *plant);
+
 }
 
 #endif //DAIRLIB_TERRAIN_UTILS_H

@@ -181,7 +181,7 @@ int do_main(int argc, char* argv[]) {
                   sensor_pub->get_input_port());
 
   const auto& [color_camera, depth_camera] =
-  camera::MakeGenericCameraModel(renderer_name);
+  camera::MakeGenericCameraModel(renderer_name, 64, 64);
   const std::optional<drake::geometry::FrameId> parent_body_id =
           plant.GetBodyFrameIdIfExists(plant.GetFrameByName("pelvis").body().index());
 
