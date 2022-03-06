@@ -204,4 +204,37 @@ namespace dairlib {
                                       "box_visual_"+std::to_string(i), drake::geometry::IllustrationProperties());
       }
     }
+
+    void generateDitchesObstacleCourse(MultibodyPlant<double> *plant, double dropout_pct) {
+      if (!plant->geometry_source_is_registered()) {
+        return;
+      }
+      std::random_device generator;
+      std::mt19937 rng(generator());
+      std::bernoulli_distribution drop(dropout_pct);
+
+      double pixel_size_m = 0.2;
+      double height = 0.5
+      int name_count = 0;
+
+      for (double x = -8; x <  8; x = x + pixel_size_m) {
+        for (double y = -8; y < 8; y = y + pixel_size_m) {
+          // Make sure the robot doesn't spawn on top of a hole
+          if (x > 1 || x < -1 || y > 1 || y < -1) {
+            if (!drop(rng)) {
+                RigidTransform<double> pose = RigidTransform<double>(drake::math::RollPitchYaw<double>(0, 0, 0),
+                                                                     Eigen::Vector3d(x, y, -height/2));
+
+                plant->RegisterCollisionGeometry(plant->world_body(), pose, drake::geometry::Box(pixel_size_m, pixel_size_m, height),
+                                                 "box_collision_"+ std::to_string(name_count), drake::multibody::CoulombFriction(0.8, 0.8));
+
+                plant->RegisterVisualGeometry(plant->world_body(), pose, drake::geometry::Box(pixel_size_m, pixel_size_m, height),
+                                              "box_visual_"+std::to_string(name_count), drake::geometry::IllustrationProperties());
+
+                name_count++; 
+            }
+          }
+        }
+      }
+    }
 }

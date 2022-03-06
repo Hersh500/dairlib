@@ -32,6 +32,8 @@ namespace dairlib {
 
     void generateObstacleCourse(MultibodyPlant<double> *plant, double sigma_x, double sigma_y);
 
+    void generateDitchesObstacleCourse(MultibodyPlant<double> *plant, double dropout_pct);
+
 }
 
 #endif //DAIRLIB_TERRAIN_UTILS_H
