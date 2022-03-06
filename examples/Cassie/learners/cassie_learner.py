@@ -31,7 +31,11 @@ def getEnv(env_name, env_params):
         return cassie_joy_env.Cassie_RandGoalObst_Blind(radio_channel, state_channel, env_params["rate_hz"],
                                       [env_params['x_lims'], env_params['y_lims'], env_params['z_lims']],
                                       env_params['visualize']), "MlpPolicy"
-        
+    elif env_name == "fixed_goal_depth":
+        return cassie_joy_env.Cassie_FixedGoal_Depth(radio_channel, state_channel, env_params["rate_hz"], 
+                                                    [env_params['x_lims'], env_params['y_lims'], env_params['z_lims']],
+                                                    env_params["goal_state"],
+                                                    env_params['visualize']), "MultiInputPolicy"
     else:
         raise NotImplementedError("This environment has not been added.")
 
@@ -50,7 +54,7 @@ def getModel(learner_name, policy_type, env, rl_params, logdir):
         model = SAC(policy_type,
                     env, verbose = rl_params["verbose"],
                     tensorboard_log = logdir,
-                    policy_kwargs=dict(normalize_images=False),
+                    # policy_kwargs=dict(normalize_images=False),
                     learning_starts = rl_params["learning_starts"],
                     batch_size = rl_params["batch_size"],
                     buffer_size = rl_params["buffer_size"])
@@ -59,7 +63,7 @@ def getModel(learner_name, policy_type, env, rl_params, logdir):
                     env,
                     verbose = rl_params["verbose"],
                     tensorboard_log = logdir,
-                    policy_kwargs=dict(normalize_images=False),
+                    # policy_kwargs=dict(normalize_images=False),
                     n_steps = rl_params["ppo_n_steps_per_update"],
                     batch_size = rl_params["batch_size"])
     return model

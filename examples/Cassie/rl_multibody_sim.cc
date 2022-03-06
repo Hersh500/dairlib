@@ -140,7 +140,11 @@ int do_main_test(int argc, char* argv[]) {
       break;
     case 4:
       multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
-      generateFixedObstacleCourse(&plant);
+      generateObstacleCourse(&plant, 0.0, 0.0);
+      break;
+    case 5:
+      multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
+      generateObstacleCourse(&plant, 0.75, 0.75);
       break;
     default:
       multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);

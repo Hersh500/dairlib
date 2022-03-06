@@ -60,12 +60,13 @@ class CassieEnv_Joystick(gym.Env):
         self.goal_state = goal_state
         self.done = False
         self.rate = rate
-        self.image_dim = (1, 64, 64)
+        self.image_dim = (64, 64, 1)
         ## will never want to go backward
         self.action_space = spaces.Box(low = np.array([0, 0, -1, -1]), high = np.array([1, 1, 1, 1]))
         # Added time as a state variable.
         self.observation_space = spaces.Dict({"position": spaces.Box(low = np.array([0, 0, 0, 0, 0, 0]), high = np.array([1, 1, 1, 1, 1, 1])),
-                                              "image": spaces.Box(low = -1, high = 1, shape = self.image_dim)})
+                                              "image": spaces.Box(low = 0, high = 255, shape = self.image_dim, dtype=np.uint8)})
+
         self.state_dim = self.observation_space["position"].shape[0]
         self._max_episode_steps = 60 * self.rate 
         self.prev_dyn_state = None
@@ -106,7 +107,7 @@ class CassieEnv_Joystick(gym.Env):
     def image_handler(self, channel, data):
         msg = lcmt_image_array.decode(data)
         image_msg = msg.images[0]
-        self.image_dim = (image_msg.height, image_msg.width)
+        self.image_dim = (image_msg.height, image_msg.width, 1)
         image_data = image_msg.data
         if image_msg.bigendian:
             image = Image.frombytes("I;16B", (image_msg.width, image_msg.height), image_data)
@@ -115,9 +116,12 @@ class CassieEnv_Joystick(gym.Env):
         image = np.array(image)
         # since the depth image has values that correspond to real quantities, this is not great.
         # all_images.append(image)
-        image = image.astype(np.float32)/1000
+        # big bug--stable baselines 3 expects images to be between 0 and 255!
+        # image = image.astype(np.float32)/1000
+        image = image/2**8
+        image = image.astype(np.uint8)
         # image = image/2**16
-        self.image_queue.put(np.expand_dims(image, axis=0))
+        self.image_queue.put(np.reshape(image, self.image_dim))
 
 
     def lcm_listener(self):
@@ -178,7 +182,7 @@ class CassieEnv_Joystick(gym.Env):
         z_cond = z_loc < self.workspace[2][0] or z_loc > self.workspace[2][1]
         if x_cond or y_cond or z_cond:
             print("Out of workspace!")
-            print("FINAL LOCATION:(", x_loc, y_loc, ")")
+            print("FINAL LOCATION:(", x_loc, y_loc, z_loc, ")")
             return True
         if self.ep_timesteps > self._max_episode_steps:
             print("max episode timesteps exceeded!")
@@ -234,7 +238,7 @@ class CassieEnv_Joystick(gym.Env):
         start = time.time_ns()
         dyn_state = self.state_queue.get(block=True)
         end = time.time_ns()
-        print(f"time to get state (s):{(end - start)/10**9}")
+#        print(f"time to get state (s):{(end - start)/10**9}")
         image = self.image_queue.get(block=True)
 
         tmp_quat = np.concatenate([dyn_state[1:4], [dyn_state[0]]])
@@ -295,7 +299,7 @@ class CassieEnv_Joystick(gym.Env):
                             "--num_obstacles="+str(self.num_features),
                             "--viz="+str(int(self.viz)), 
                             "--target_realtime_rate=0.01", t_string,
-                            "--dt="+str(0.0001), "--penetration_allowance="+str(1e-3)])
+                            "--dt="+str(0.00009)])
         time.sleep(1.5)
         # vary the goal state
         # random_ang = np.random.rand() * np.pi
@@ -351,8 +355,6 @@ class CassieEnv_Joystick(gym.Env):
             self.drake_director.terminate()
 
 
-    
-
 class Cassie_FixedInit(CassieEnv_Joystick):
     def __init__(self,
                 action_channel,
@@ -389,12 +391,12 @@ class Cassie_FixedInit(CassieEnv_Joystick):
         
         self.ctrlr = sp.Popen([self.bin_dir + self.controller_p] + self.ctrlr_options)
         t_string = "--terrain_type=" + str(self.terrain_class)
+        # 9e-5 instead of 8e-5 gives a slight speedup in sim time, though not that much.
         self.sim = sp.Popen([self.bin_dir + self.simulation_p,
                             "--ic_idx=" + str(ic_idx),
                             "--num_obstacles="+str(self.num_features),
                             "--viz="+str(int(self.viz)), 
-                            "--target_realtime_rate=0.0", t_string,
-                            ])
+                            "--target_realtime_rate=0.0", t_string,"--dt="+str(0.00009)])
         time.sleep(1.5)
 
         if self.stop_listener.is_set():
@@ -504,6 +506,21 @@ class Cassie_RandGoalObst_Blind(Cassie_FixedInit):
         self.state = state["position"]
         return self.state
 
+
+# Task where the locations of the obstacles are changed slightly
+class Cassie_FixedGoal_Depth(CassieEnv_Joystick):
+    def __init__(self,
+                action_channel,
+                state_channel,
+                rate,
+                workspace,
+                goal_state,
+                visualize):
+        super().__init__(action_channel, state_channel, rate, workspace, goal_state, visualize,
+                         terrain_class = 5, num_features = 1, reward_fn_type = 1, acc_penalty = False)
+
+        self.fail_penalty = 20
+        self.success_reward = 20
 
 
 def main():

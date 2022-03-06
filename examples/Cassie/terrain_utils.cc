@@ -168,7 +168,7 @@ namespace dairlib {
                                     "box_visual_" + std::to_string(4), drake::geometry::IllustrationProperties());
     }
 
-    void generateFixedObstacleCourse(MultibodyPlant<double> *plant) {
+    void generateObstacleCourse(MultibodyPlant<double> *plant, double sigma_x, double sigma_y) {
       if (!plant->geometry_source_is_registered()) {
         return;
       }
@@ -183,11 +183,15 @@ namespace dairlib {
           -2.5, 0,
           0, -2.5;
 
+      std::random_device generator;
+      std::mt19937 rng(generator());
+      std::normal_distribution<double> deltas(0.0, 1.0);
+
       double width = 0.5;
       double height = 1;
       for (int i = 0; i < locs.rows(); i++) {
-        double x = locs(i, 0);
-        double y = locs(i, 1);
+        double x = locs(i, 0) + deltas(rng) * sigma_x;
+        double y = locs(i, 1) + deltas(rng) * sigma_y;
 
         // Generate a random pose for this object; maybe based on some stochastic process?
         RigidTransform<double> pose = RigidTransform<double>(drake::math::RollPitchYaw<double>(0, 0, 0),
