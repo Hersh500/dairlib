@@ -507,7 +507,6 @@ class Cassie_RandGoalObst_Blind(Cassie_FixedInit):
         return self.state
 
 
-# Task where the locations of the obstacles are changed slightly
 class Cassie_FixedGoal_Depth(CassieEnv_Joystick):
     def __init__(self,
                 action_channel,
@@ -515,12 +514,19 @@ class Cassie_FixedGoal_Depth(CassieEnv_Joystick):
                 rate,
                 workspace,
                 goal_state,
-                visualize):
-        super().__init__(action_channel, state_channel, rate, workspace, goal_state, visualize,
-                         terrain_class = 5, num_features = 1, reward_fn_type = 1, acc_penalty = False)
+                visualize,
+                ditches = False):
+        if not ditches:
+            super().__init__(action_channel, state_channel, rate, workspace, goal_state, visualize,
+                             terrain_class = 5, num_features = 1, reward_fn_type = 1, acc_penalty = False)
+        else:
+            super().__init__(action_channel, state_channel, rate, workspace, goal_state, visualize,
+                             terrain_class = 6, num_features = 1, reward_fn_type = 1, acc_penalty = False)
+        
 
         self.fail_penalty = 20
         self.success_reward = 20
+
 
 
 def main():

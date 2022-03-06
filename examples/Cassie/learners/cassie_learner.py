@@ -36,6 +36,13 @@ def getEnv(env_name, env_params):
                                                     [env_params['x_lims'], env_params['y_lims'], env_params['z_lims']],
                                                     env_params["goal_state"],
                                                     env_params['visualize']), "MultiInputPolicy"
+
+    elif env_name == "fixed_goal_ditches_depth":
+        return cassie_joy_env.Cassie_FixedGoal_Depth(radio_channel, state_channel, env_params["rate_hz"], 
+                                                    [env_params['x_lims'], env_params['y_lims'], env_params['z_lims']],
+                                                    env_params["goal_state"],
+                                                    env_params['visualize'], True), "MultiInputPolicy"
+
     else:
         raise NotImplementedError("This environment has not been added.")
 
