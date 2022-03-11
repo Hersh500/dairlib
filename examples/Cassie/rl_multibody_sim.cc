@@ -147,7 +147,8 @@ int do_main_test(int argc, char* argv[]) {
       generateObstacleCourse(&plant, 0.75, 0.75);
       break;
     case 6:
-      generateDitchesObstacleCourse(&plant, 0.05); 
+      plant.RegisterAsSourceForSceneGraph(&scene_graph);
+      generateDitchesObstacleCourse(&plant, 0.1);
       break;
     default:
       multibody::addFlatTerrain(&plant, &scene_graph, .8, .8);
@@ -293,14 +294,15 @@ int do_main_test(int argc, char* argv[]) {
       diagram->GetMutableSubsystemContext(plant, diagram_context.get());
 
   // Set initial conditions of the simulation
-//  VectorXd q_init, u_init, lambda_init, v_init;
+  VectorXd q_init, u_init, lambda_init, v_init;
 
   // read the matrix and get the initial conditions
-//  MatrixXd initial_conds = readCSV(FLAGS_ic_fname);
-//  q_init = initial_conds.block(0, FLAGS_ic_idx, 23,1);
-//  v_init = initial_conds.block(23, FLAGS_ic_idx, 22, 1);
+  MatrixXd initial_conds = readCSV(FLAGS_ic_fname);
+  q_init = initial_conds.block(0, FLAGS_ic_idx, 23,1);
+  v_init = initial_conds.block(23, FLAGS_ic_idx, 22, 1);
+
   // TEMP: does not having the fixed initial conditions enable me to change the sim params?
-  VectorXd q_init, u_init, lambda_init;
+//   VectorXd q_init, u_init, lambda_init;
   double mu_fp = 0;
   double min_normal_fp = 70;
 
@@ -308,9 +310,10 @@ int do_main_test(int argc, char* argv[]) {
   // Note that we cannot use the plant from the above diagram, because after the
   // diagram is built, plant.get_actuation_input_port().HasValue(*context)
   // throws a segfault error
+  /*
   drake::multibody::MultibodyPlant<double> plant_for_solver(0.0);
   addCassieMultibody(&plant_for_solver, nullptr,
-                     FLAGS_floating_base /*floating base*/, urdf,
+                     FLAGS_floating_base, urdf,
                      FLAGS_spring_model, true);
   plant_for_solver.Finalize();
   if (FLAGS_floating_base) {
@@ -321,6 +324,7 @@ int do_main_test(int argc, char* argv[]) {
     CassieFixedBaseFixedPointSolver(plant_for_solver, &q_init, &u_init,
                                     &lambda_init);
   }
+  */
 
   if (FLAGS_make_srbd_approx) {
     std::vector<std::string> links = {"yaw_left", "yaw_right", "hip_left", "hip_right",

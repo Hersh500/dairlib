@@ -12,7 +12,10 @@ import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 import threading
 import argparse
+import warnings
 
+# this is bad, but need to suppress like 50 LCM deprecation warnings
+warnings.filterwarnings("ignore")
 
 class CassieEnv_Joystick(gym.Env):
     def __init__(self,
@@ -217,6 +220,7 @@ class CassieEnv_Joystick(gym.Env):
         return (var - self.workspace[1][0])/(self.workspace[1][0] - self.workspace[1][1])
 
     def step(self, action):
+        # print(f"action: {action}")
         action_msg = lcmt_radio_out()
         action_msg.channel[0:4] = action
 
@@ -238,7 +242,7 @@ class CassieEnv_Joystick(gym.Env):
         start = time.time_ns()
         dyn_state = self.state_queue.get(block=True)
         end = time.time_ns()
-#        print(f"time to get state (s):{(end - start)/10**9}")
+        # print(f"time to get state (s):{(end - start)/10**9}")
         image = self.image_queue.get(block=True)
 
         tmp_quat = np.concatenate([dyn_state[1:4], [dyn_state[0]]])
@@ -386,7 +390,7 @@ class Cassie_FixedInit(CassieEnv_Joystick):
         # self.goal_state = [np.random.uniform(1, self.goal_max), 0]
 
         # pick a new initial condition, set that as our state
-        ic_idx = 20
+        ic_idx = 100
         ic = self.all_ics[:,ic_idx]
         
         self.ctrlr = sp.Popen([self.bin_dir + self.controller_p] + self.ctrlr_options)
@@ -507,7 +511,7 @@ class Cassie_RandGoalObst_Blind(Cassie_FixedInit):
         return self.state
 
 
-class Cassie_FixedGoal_Depth(CassieEnv_Joystick):
+class Cassie_FixedGoal_Depth(Cassie_FixedInit):
     def __init__(self,
                 action_channel,
                 state_channel,
@@ -518,22 +522,25 @@ class Cassie_FixedGoal_Depth(CassieEnv_Joystick):
                 ditches = False):
         if not ditches:
             super().__init__(action_channel, state_channel, rate, workspace, goal_state, visualize,
-                             terrain_class = 5, num_features = 1, reward_fn_type = 1, acc_penalty = False)
+                             terrain_class = 5, num_features = 0)
         else:
             super().__init__(action_channel, state_channel, rate, workspace, goal_state, visualize,
-                             terrain_class = 6, num_features = 1, reward_fn_type = 1, acc_penalty = False)
+                             terrain_class = 6, num_features = 0)
         
 
         self.fail_penalty = 20
-        self.success_reward = 20
+
+        # try making this 0 to encourage more exploration
+        # self.success_reward = 20
+        self.success_reward = 0
 
 
 
 def main():
     try: 
         workspace = [[-1, 5], [-3, 3], [0.5, 1.3]]
-        # env = Cassie_SingleObst_Blind("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_RL", 2, workspace, [1, 0], True)
-        env = CassieEnv_Joystick("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_RL", 2, workspace, [4, 4], True, 4, 0, 1, False)
+        env = Cassie_FixedGoal_Depth("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_RL", 2, workspace, [1, 0], True, False)
+        # env = CassieEnv_Joystick("CASSIE_VIRTUAL_RADIO", "CASSIE_STATE_RL", 2, workspace, [4, 4], True, 4, 0, 1, False)
         s = env.reset()
         i = 0
         while i < 20: 

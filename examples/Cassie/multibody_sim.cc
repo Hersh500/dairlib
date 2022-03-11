@@ -244,7 +244,8 @@ int do_main(int argc, char* argv[]) {
 
   return 0;
 }
-
+// LOAD THE TRIFINGER EXAMPLE FROM THE MAIN REPO--LOGGING THE STATES IN PYTHON
+/
 }  // namespace dairlib
 
 int main(int argc, char* argv[]) { return dairlib::do_main(argc, argv); }

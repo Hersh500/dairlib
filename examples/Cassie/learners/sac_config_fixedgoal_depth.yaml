@@ -6,7 +6,7 @@ env_params:
     z_lims: [0.5, 1.3]
 
     rate_hz: 5
-    goal_state: [4, 0]
+    goal_state: [3, 0]
     visualize: True
     blind: True
 
