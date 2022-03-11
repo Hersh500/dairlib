@@ -221,6 +221,30 @@ def calc_residual_norms(srb_data, srb_input, srb_stance,
             'dense': res_norm_dense}
 
 
+def calc_error_wrong_mode_switch(srb_data, srb_input, srb_stance, modes, dynamics, T, tsteps_in_wrong_mode, N):
+    # find the first mode switch
+    switch_t = 0
+    for i in range(len(modes)):
+        if modes[i+1] != modes[i]:
+            print(f"found first mode switch at t = {i}")   
+            switch_t = i
+            break
+
+    fake_modes = np.array(modes)
+    fake_stance_foot = np.array(srb_stance['p'])
+    # think the switch happened earlier than it actually did
+    fake_modes[switch_t - tsteps_in_wrong_mode:switch_t + 1] = modes[switch_t + 1]
+    # print(f"srb stance switch_t {srb_stance['p'][switch_t]}")
+    # print(f"srb stance switch_t+1 {srb_stance['p'][switch_t + 1]}")
+
+    fake_stance_foot[switch_t - tsteps_in_wrong_mode : switch_t + 1] = srb_stance['p'][switch_t+1]
+    fake_stances = {'p':fake_stance_foot}
+    
+    error_norms_wrong = calc_error_norms(srb_data, srb_input, fake_stances, fake_modes, dynamics, T, switch_t + N)
+    error_norms_right = calc_error_norms(srb_data, srb_input, srb_stance, modes, dynamics, T, switch_t + N)
+    return switch_t, error_norms_wrong, error_norms_right
+
+
 def calc_error_norms(srb_data, srb_input, srb_stance, modes, dynamics, T, N):
     states_and_steps = np.hstack((srb_data['x'], srb_stance['p']))
     error_norm_nominal = []
@@ -278,7 +302,7 @@ def calc_error_norms(srb_data, srb_input, srb_stance, modes, dynamics, T, N):
 
 
 def load_srb_dynamics():
-    dirname = "/home/brian/workspace/srb_dynamics/"
+    dirname = "/home/hersh/workspace/srb_dynamics/"
     Al = np.loadtxt(dirname + "Al.csv", delimiter=',')
     Bl = np.loadtxt(dirname + "Bl.csv", delimiter=',')
     bl = np.loadtxt(dirname + "bl.csv", delimiter=',')
@@ -339,27 +363,54 @@ def main():
     N = 2800
     dynamics = load_srb_dynamics()
     modes = get_srbd_modes(robot_output, osc_debug)
-    error_norms = calc_error_norms(srbd_data, srbd_input, srbd_stance,
-                                   modes['mode'], dynamics, T, N)
+    # error_norms = calc_error_norms(srbd_data, srbd_input, srbd_stance,
+    #                                modes['mode'], dynamics, T, N)
+
     # delta_norms = calc_residual_smoothness(srbd_data, srbd_input, srbd_stance,
     #                                        modes['mode'], dynamics, T, N)
     # res_norms = calc_residual_norms(srbd_data, srbd_input, srbd_stance,
     #                                 modes['mode'], dynamics, T, N)
 
     error_norm_keys = ['nominal', 'sparse', 'dense']
+    '''
     error_norm_legend = ['Nominal', 'Sparse Residual', 'Dense Residual']
     ps1 = plot_styler.PlotStyler()
-    ps1.set_default_styling('/home/brian/classes/ese618hw/')
+    ps1.set_default_styling('/home/hersh/workspace/')
     for key in error_norm_keys:
         ps1.plot(error_norms['t'], error_norms[key])
     ps1.add_legend(error_norm_legend)
     plt.xlabel('Time (s)')
     plt.ylabel('$|| \dot{x} - \dot{x}_{model} ||_{2}$')
-    plt.title('Dynamics error over 4 steps under closed loop MPC control')
+    # plt.title('Dynamics error over 4 steps under closed loop MPC control')
 
     res_norm_keys = ['sparse', 'dense']
 
     plt.show()
+    '''
+    switch_t, error_norms_wrong, error_norms_right = calc_error_wrong_mode_switch(srbd_data, srbd_input, srbd_stance, modes['mode'], dynamics, 200, 100, 500)
 
+    # print(error_norms_right['dense'].shape)
+    fig = plt.figure(figsize=(9, 6))
+    ps1 = plot_styler.PlotStyler(fig)
+    ps1.set_default_styling('/home/hersh/workspace/')
+    t_start = 500
+    t_end = 1000
+    ps1.plot(error_norms_wrong['t'][t_start:t_end], error_norms_wrong['dense'][t_start:t_end])
+    ps1.plot(error_norms_right['t'][t_start:t_end], error_norms_right['dense'][t_start:t_end])
+    ps1.plot(error_norms_wrong['t'][t_start:t_end], error_norms_wrong['nominal'][t_start:t_end],
+             title = "Error norms of residual estimator \n with incorrect mode switch")
+    ps1.add_legend(["Residual with incorrect switch time", 'Residual with correct switch time', 'Nominal with incorrect switch time'], 1)
+    plt.xlabel('Time (s)')
+    plt.ylabel('$|| \dot{x} - \dot{x}_{model} ||_{2}$')
+    ps1.fig.gca().set_ylim(-100, 500)
+    x_right = error_norms_wrong['t'][switch_t]
+    x_wrong = error_norms_wrong['t'][switch_t - 100]
+    ps1.fig.gca().axvline(x = x_wrong, color = "black", linestyle='dotted')
+    ps1.fig.gca().axvline(x = x_right, color = "black", linestyle='dotted')
+    # ps1.annotate("Anticipated switch time", x_wrong, 300, x_wrong, 300)
+    # ps1.annotate("Actual switch time", x_right, 200, x_right, 200)
+    ps1.save_fig("wrong_foot_placement.png")
+    plt.show()
+    
 if __name__ == '__main__':
     main()
